@@ -6,6 +6,7 @@ import { createPixiApp, destroyPixiApp, getApp, markDirty } from "./render/pixiA
 import { buildTankView, type TankView } from "./render/tankRenderer";
 import { generateTank, type TankState } from "./sim/tankgen";
 import { advanceSim, createInitialSimState } from "./sim/integrate";
+import { populationFor } from "./sim/species";
 import type { SimEvent, SimState } from "./sim/types";
 import { createGameLoop, type GameLoop } from "./game/loop";
 import { createStorage } from "./persistence/storage";
@@ -19,6 +20,7 @@ import {
   discoveries,
   pushToast,
   recordEvents,
+  recordSightings,
   resetGameState,
   savedGame,
   screen,
@@ -26,8 +28,10 @@ import {
   setSavedGame,
   setScreen,
   setSim,
+  setSpeciesDiscovered,
   setTank,
   sim,
+  speciesDiscovered,
   tank,
 } from "./ui/store";
 
@@ -63,7 +67,13 @@ export default function App() {
   const persist = (): void => {
     const currentSim = loop?.current() ?? sim();
     if (!activeTank || !currentSim) return;
-    const data = buildSave(activeTank, currentSim, discoveries(), Date.now());
+    const data = buildSave(
+      activeTank,
+      currentSim,
+      discoveries(),
+      Date.now(),
+      speciesDiscovered(),
+    );
     void storage.write(JSON.stringify(data));
   };
 
@@ -73,16 +83,21 @@ export default function App() {
   ): void => {
     setSim(simState);
     recordEvents(events);
-    view?.update(simState);
+    const population = activeTank ? populationFor(activeTank, simState) : [];
+    const newSightings = recordSightings(population, simState.simTimeMs);
+    view?.update(simState, population);
     markDirty();
-    if (events.length > 0) persist(); // milestones are precious — save now
+    // milestones and first sightings are precious — save immediately
+    if (events.length > 0 || newSightings) persist();
   };
 
   const beginPlaying = (newTank: TankState, simState: SimState): void => {
     const app = getApp();
     view?.destroy();
     view = buildTankView(app.stage, newTank, app.screen.width, app.screen.height);
-    view.update(simState);
+    const population = populationFor(newTank, simState);
+    recordSightings(population, simState.simTimeMs, false);
+    view.update(simState, population);
     activeTank = newTank;
     setTank(newTank);
     setSim(simState);
@@ -113,6 +128,7 @@ export default function App() {
     // dev fast-forward in chunks (catch-up is clamped to 24h by design)
     let remainingMs = simHours * HOUR_MS;
     setDiscoveries([]);
+    setSpeciesDiscovered(new Map());
     while (remainingMs > 0) {
       const chunk = Math.min(remainingMs, 12 * HOUR_MS);
       const result = advanceSim(simState, chunk, newTank.env);
@@ -132,6 +148,9 @@ export default function App() {
         phase: d.phase,
         atSimTimeMs: d.atSimTimeMs,
       })),
+    );
+    setSpeciesDiscovered(
+      new Map(save.speciesDiscovered.map((s) => [s.id, s.atSimTimeMs])),
     );
 
     // offline catch-up: the world kept living while the app was closed

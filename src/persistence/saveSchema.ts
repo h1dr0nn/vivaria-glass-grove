@@ -42,6 +42,15 @@ export const saveSchema = z.object({
       atSimTimeMs: z.number().nonnegative(),
     }),
   ),
+  // .default keeps pre-species saves loadable without a migration
+  speciesDiscovered: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        atSimTimeMs: z.number().nonnegative(),
+      }),
+    )
+    .default([]),
 });
 
 export type SaveData = z.infer<typeof saveSchema>;

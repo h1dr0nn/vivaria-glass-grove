@@ -1,16 +1,18 @@
 import { ColorMatrixFilter, Container } from "pixi.js";
 import type { SimState } from "../sim/types";
+import type { PopulationEntry } from "../sim/species";
 import type { TankState } from "../sim/tankgen";
 import { computeLayout } from "./layout";
 import { buildBackdrop } from "./layers/backdrop";
+import { buildCreatures } from "./layers/creatures";
 import { buildFlora } from "./layers/flora";
 import { buildGlass } from "./layers/glass";
 import { buildSubstrate } from "./layers/substrate";
 import { buildWater } from "./layers/water";
 
 export interface TankView {
-  /** redraw growth visuals from sim state — call on sim updates */
-  update(sim: SimState): void;
+  /** redraw growth + population visuals — call on sim updates */
+  update(sim: SimState, population: readonly PopulationEntry[]): void;
   /** ambient motion frame — call ONLY from the visible-gated slow ticker */
   tick(timeMs: number): void;
   destroy(): void;
@@ -32,12 +34,14 @@ export function buildTankView(
 
   const water = buildWater(tank, layout);
   const flora = buildFlora(tank, layout);
+  const creatures = buildCreatures(tank, layout);
 
   root.addChild(
     buildBackdrop(viewWidth, viewHeight, layout),
     water.behind,
     buildSubstrate(tank, layout),
     flora.container,
+    creatures.container,
     water.overlay,
     buildGlass(layout),
   );
@@ -55,11 +59,13 @@ export function buildTankView(
   stage.addChild(root);
 
   return {
-    update(sim: SimState): void {
+    update(sim: SimState, population: readonly PopulationEntry[]): void {
       flora.update(sim);
+      creatures.update(population);
     },
     tick(timeMs: number): void {
       flora.tick(timeMs);
+      creatures.tick(timeMs);
       water.ripple(timeMs / 700);
     },
     destroy(): void {

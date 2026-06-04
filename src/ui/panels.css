@@ -402,13 +402,28 @@
   color: var(--color-text-faint);
 }
 
-.almanac-list {
+.almanac-scroll {
+  margin-top: var(--space-2);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.almanac-section {
   margin-top: var(--space-4);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.almanac-list {
+  margin-top: var(--space-2);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   list-style: none;
-  overflow-y: auto;
 }
 
 .almanac-entry {
@@ -445,18 +460,18 @@
 .toast-stack {
   position: absolute;
   bottom: var(--space-6);
-  left: 50%;
-  transform: translateX(-50%);
+  left: var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  align-items: center;
+  align-items: flex-start;
+  max-width: min(360px, 60vw);
   pointer-events: none;
 }
 
 .toast {
-  padding: var(--space-3) var(--space-6);
-  text-align: center;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
   background: oklch(30% 0.025 70 / 0.92);
   border: 1px solid oklch(60% 0.06 95 / 0.4);
   border-radius: var(--radius-soft);

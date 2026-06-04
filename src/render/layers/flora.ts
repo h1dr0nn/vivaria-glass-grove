@@ -16,12 +16,15 @@ const MAX_ALGAE_TUFTS = 22;
 const MAX_PLANTS = 16;
 const MICROBE_SPECKS = 36;
 
+type PlantKind = "aquatic" | "fern" | "moss";
+
 interface Anchor {
   readonly x: number;
   readonly y: number;
   readonly variant: number;
   /** scalar value at which this anchor becomes visible */
   readonly threshold: number;
+  readonly kind: PlantKind;
 }
 
 export interface FloraLayer {
@@ -98,7 +101,17 @@ function pickAnchors(
     y: tank.terrainHeight[x],
     variant: Math.floor(rng() * 1000),
     threshold: (i + 0.5) / max,
+    kind: plantKindAt(tank, x),
   }));
+}
+
+/** What grows here: waterweed below the line, ferns low, moss up high. */
+function plantKindAt(tank: TankState, x: number): PlantKind {
+  if (isUnderwaterSurface(tank, x)) return "aquatic";
+  const zone = tank.zones[cellIndex(tank.width, x, tank.terrainHeight[x])];
+  if (zone === ZONE.highland) return "moss";
+  if (zone === ZONE.midland) return ((x % 2) === 0 ? "fern" : "moss");
+  return "fern";
 }
 
 function isUnderwaterSurface(tank: TankState, x: number): boolean {
@@ -249,7 +262,100 @@ function drawPlants(
     const growth = staggeredGrowth(plants, anchor.threshold);
     if (growth <= 0) continue;
     const sway = Math.sin(phase * 0.8 + anchor.variant) * 0.12 * growth;
-    drawSprout(g, layout, anchor, growth, sway);
+    switch (anchor.kind) {
+      case "fern":
+        drawFern(g, layout, anchor, growth, sway);
+        break;
+      case "moss":
+        drawMossCushion(g, layout, anchor, growth);
+        break;
+      default:
+        drawSprout(g, layout, anchor, growth, sway);
+        break;
+    }
+  }
+}
+
+/** Arched fronds with leaflets — the forest-floor look. */
+function drawFern(
+  g: Graphics,
+  layout: TankLayout,
+  anchor: Anchor,
+  growth: number,
+  sway: number,
+): void {
+  const baseX = screenX(layout, anchor.x + 0.5);
+  const baseY = screenY(layout, anchor.y);
+  const fronds = 2 + (anchor.variant % 3);
+  const reach = layout.scale * (1.2 + growth * 7) * (0.8 + (anchor.variant % 4) * 0.1);
+
+  for (let f = 0; f < fronds; f++) {
+    const lean = (f / Math.max(1, fronds - 1) - 0.5) * 1.8 + sway * 2;
+    const tipX = baseX + lean * reach * 0.55;
+    const tipY = baseY - reach * (0.75 + (f % 2) * 0.2);
+    g.moveTo(baseX, baseY)
+      .quadraticCurveTo(baseX + lean * reach * 0.15, baseY - reach * 0.6, tipX, tipY)
+      .stroke({
+        color: SCENE.stem,
+        alpha: 0.9,
+        width: Math.max(1, layout.scale * 0.22),
+      });
+    const leaflets = 2 + Math.floor(growth * 4);
+    for (let l = 1; l <= leaflets; l++) {
+      const t = l / (leaflets + 1);
+      const lx = baseX + (tipX - baseX) * t;
+      const ly = baseY + (tipY - baseY) * t - reach * 0.1 * Math.sin(t * Math.PI);
+      const size = layout.scale * (0.55 + growth * 0.7) * (1 - t * 0.45);
+      g.ellipse(lx - size * 0.5, ly, size, size * 0.32).fill({
+        color: SCENE.leaf,
+        alpha: 0.9,
+      });
+      g.ellipse(lx + size * 0.5, ly, size, size * 0.32).fill({
+        color: SCENE.leafLight,
+        alpha: 0.9,
+      });
+    }
+  }
+}
+
+/** A soft green dome with tiny spore stalks — the highland look. */
+function drawMossCushion(
+  g: Graphics,
+  layout: TankLayout,
+  anchor: Anchor,
+  growth: number,
+): void {
+  const baseX = screenX(layout, anchor.x + 0.5);
+  const baseY = screenY(layout, anchor.y);
+  const width = layout.scale * (1.4 + growth * 3.4);
+  const height = layout.scale * (0.6 + growth * 1.3);
+
+  g.ellipse(baseX, baseY - height * 0.3, width, height).fill({
+    color: SCENE.moss,
+    alpha: 0.95,
+  });
+  g.ellipse(baseX - width * 0.25, baseY - height * 0.55, width * 0.5, height * 0.5).fill({
+    color: SCENE.leafLight,
+    alpha: 0.5,
+  });
+  // spore stalks rise from a mature cushion
+  if (growth > 0.5) {
+    const stalks = 1 + (anchor.variant % 3);
+    for (let s = 0; s < stalks; s++) {
+      const sx = baseX + (s - stalks / 2) * width * 0.4;
+      const sh = height * (1.6 + (s % 2) * 0.5);
+      g.moveTo(sx, baseY - height * 0.5)
+        .lineTo(sx, baseY - height * 0.5 - sh)
+        .stroke({
+          color: SCENE.algaeDeep,
+          alpha: 0.8,
+          width: Math.max(0.8, layout.scale * 0.12),
+        });
+      g.circle(sx, baseY - height * 0.5 - sh, layout.scale * 0.18).fill({
+        color: 0xc9a86a,
+        alpha: 0.9,
+      });
+    }
   }
 }
 

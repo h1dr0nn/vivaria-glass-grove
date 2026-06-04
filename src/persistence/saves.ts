@@ -16,6 +16,7 @@ export function buildSave(
   sim: SimState,
   discoveries: readonly DiscoveryLike[],
   savedAtUnixMs: number,
+  speciesDiscovered: ReadonlyMap<string, number> = new Map(),
 ): SaveData {
   return {
     schemaVersion: CURRENT_SAVE_VERSION,
@@ -34,6 +35,9 @@ export function buildSave(
       phase: d.phase,
       atSimTimeMs: d.atSimTimeMs,
     })),
+    speciesDiscovered: [...speciesDiscovered.entries()].map(
+      ([id, atSimTimeMs]) => ({ id, atSimTimeMs }),
+    ),
   };
 }
 
