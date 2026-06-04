@@ -43,8 +43,9 @@ export function buildMaterials(
   for (let x = 0; x < width; x++) {
     const surface = terrain[x];
     const isLand = surface >= waterlineY;
-    // steady bands (per-column jitter read as rendering glitches)
-    const drainage = isLand ? 3 : 2;
+    // ONE uniform drainage band — a land/water thickness difference put a
+    // visible 1-cell notch exactly at the shore crossing
+    const drainage = 2;
     const capThickness = isLand ? 2 : 1;
     void rng; // reserved for future substrate variation
     // sand only underwater and on the BEACH hugging the water's edge —
