@@ -55,8 +55,10 @@ seed + landPercent
   → STEP 0  split seed into sub-streams (terrain/water/substrate/hardscape/biome)
             archetype by landPercent bucket: 0-5 OPEN_WATER, 6-30 RIVERBANK,
             31-69 PALUDARIUM, 70-94 BOG/HILLSIDE, 95-100 DRYLAND
-  → STEP 1  1D fBm heightmap (3 octaves), amplitude scales with landPercent, soft tilt bias
-  → STEP 2  waterline: binary-search Y so submerged volume hits (100-landPercent)% ±2%
+  → STEP 1-2  waterline first (deeper for watery tanks), then terrain: basin below it,
+            land plateau above it, columns split at the slider fraction with a soft
+            blend (the blend slope crossing the waterline IS the beach). fBm noise on
+            top. Seeded tilt sign puts land left or right.
   → STEP 3  substrate stack per column: DRAINAGE → SOIL → SAND cap (wet) / LITTER (dry)
   → STEP 4  hardscape: Poisson-disk rocks (0-4) + driftwood (0-2, bridges waterline)
   → STEP 5  static fields: light (top-down attenuation), moisture (closed-form gradient),
@@ -64,6 +66,13 @@ seed + landPercent
   → TankState { seed, landPercent, archetype, materialGrid, terrainHeight[], waterlineY,
                 hardscape[], fields, zoneMap } — immutable
 ```
+
+> **Decision change (2026-06-04, during build):** the original research said
+> "binary-search the waterline so submerged VOLUME = (100-land)%". Implemented and
+> rejected: at mid sliders the volume target floods all terrain (no emergent land,
+> no shore). The slider's promise is VISUAL — **~landPercent% of columns are emergent
+> land** — which matches player intuition ("nửa cạn nửa nước" = what you see).
+> Tests assert the column fraction within ±12 across seeds.
 
 ## Rendering rules (idle CPU is a feature)
 
