@@ -71,33 +71,77 @@ export function buildSubstrate(tank: TankState, layout: TankLayout): Container {
   }
   container.addChild(g);
 
-  container.addChild(buildSurfaceHighlight(tank, layout));
+  container.addChild(buildTopFaces(tank, layout, wetness));
   container.addChild(buildPebbles(tank, layout, rng));
   container.addChild(buildHardscapeShapes(tank, layout));
   return container;
 }
 
-/** Gentle highlight tracing the terrain surface — softens cell edges. */
-function buildSurfaceHighlight(tank: TankState, layout: TankLayout): Graphics {
-  const surface = new Graphics();
-  let penDown = false;
-  for (let x = 0; x < tank.width; x++) {
-    const h = tank.terrainHeight[x];
-    const px = screenX(layout, x) + layout.scale / 2;
-    const py = screenY(layout, h);
-    if (!penDown) {
-      surface.moveTo(px, py);
-      penDown = true;
-    } else {
-      surface.lineTo(px, py);
+/**
+ * The terrain's TOP FACE — a continuous lit ribbon following the surface
+ * profile (steps included), receding by the same depth vector as the water
+ * band and glass rim. Without it the 3D water surface met a flat 2D land
+ * cutout at the shore and the projection visibly broke.
+ */
+function buildTopFaces(
+  tank: TankState,
+  layout: TankLayout,
+  wetness: readonly number[],
+): Graphics {
+  const g = new Graphics();
+  const maxX = layout.originX + layout.tankWidthPx;
+
+  // contiguous runs of the same cap material fill as ONE ribbon segment
+  let runStart = 0;
+  let runCap = capMaterialAt(tank, 0);
+  for (let x = 1; x <= tank.width; x++) {
+    const cap = x < tank.width ? capMaterialAt(tank, x) : -1;
+    if (cap !== runCap) {
+      if (isSolid(runCap)) {
+        fillTopRibbon(g, tank, layout, runStart, x, runCap, wetness, maxX);
+      }
+      runStart = x;
+      runCap = cap;
     }
   }
-  surface.stroke({
-    color: 0xf2e7c8,
-    alpha: 0.28,
-    width: Math.max(1, layout.scale * 0.35),
-  });
-  return surface;
+  return g;
+}
+
+function capMaterialAt(tank: TankState, x: number): number {
+  const surface = tank.terrainHeight[x];
+  return tank.materials[cellIndex(tank.width, x, Math.max(0, surface - 1))];
+}
+
+function fillTopRibbon(
+  g: Graphics,
+  tank: TankState,
+  layout: TankLayout,
+  start: number,
+  end: number,
+  cap: number,
+  wetness: readonly number[],
+  maxX: number,
+): void {
+  const { depthX, depthY } = layout;
+  // front edge: stepped terrain profile left → right
+  const front: number[] = [];
+  for (let x = start; x < end; x++) {
+    const y = screenY(layout, tank.terrainHeight[x]);
+    front.push(screenX(layout, x), y, screenX(layout, x + 1), y);
+  }
+  // back edge: same profile, receded — clamped inside the glass
+  const back: number[] = [];
+  for (let i = front.length - 2; i >= 0; i -= 2) {
+    back.push(Math.min(maxX, front[i] + depthX), front[i + 1] + depthY);
+  }
+
+  let meanWetness = 0;
+  for (let x = start; x < end; x++) meanWetness += wetness[x];
+  meanWetness /= Math.max(1, end - start);
+
+  g.poly([...front, ...back]).fill(
+    shade(fillFor(cap, meanWetness), 1.18),
+  );
 }
 
 /**

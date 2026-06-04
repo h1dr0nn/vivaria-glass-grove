@@ -70,22 +70,20 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       const top = screenY(layout, waterlineY);
       const x0 = screenX(layout, run.start);
       const x1 = screenX(layout, run.end);
-      // skew only where the run meets the glass — where it meets the bank
-      // the surface slips BEHIND the land, so that edge cuts straight up
-      const leftSkew = run.start === 0 ? layout.depthX : 0;
-      const rightSkew = run.end === width ? layout.depthX : 0;
+      // both edges recede with the shared depth vector — at the shore this
+      // diagonal meets the terrain's top ribbon (same projection language)
       surfaceBand
         .poly([
           x0, top,
           x1, top,
-          x1 + rightSkew, top + layout.depthY,
-          x0 + leftSkew, top + layout.depthY,
+          x1 + layout.depthX, top + layout.depthY,
+          x0 + layout.depthX, top + layout.depthY,
         ])
         .fill(bandGradient);
       // specular streak along the far edge
       surfaceBand
-        .moveTo(x0 + leftSkew, top + layout.depthY)
-        .lineTo(x1 + rightSkew, top + layout.depthY)
+        .moveTo(x0 + layout.depthX, top + layout.depthY)
+        .lineTo(x1 + layout.depthX, top + layout.depthY)
         .stroke({
           color: SCENE.surfaceLine,
           alpha: 0.5,
