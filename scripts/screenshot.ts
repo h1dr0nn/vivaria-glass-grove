@@ -11,10 +11,16 @@ const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: 1280, height: 800 },
 });
+const params = new URLSearchParams(query);
 await page.goto(`http://localhost:1420/?${query}`, { waitUntil: "load" });
 await page.waitForSelector("canvas", { timeout: 15_000 });
 // let the first render-on-demand frames land
 await page.waitForTimeout(1500);
+const clickText = params.get("click");
+if (clickText) {
+  await page.click(`text=${clickText}`);
+  await page.waitForTimeout(600);
+}
 await page.screenshot({ path: out });
 await browser.close();
 // eslint-disable-next-line no-console
