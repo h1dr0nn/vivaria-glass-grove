@@ -27,7 +27,7 @@ export interface SloshReading {
   readonly bob: number;
 }
 
-const TILT_GAIN = 0.05; // ≈2.9° at full deflection
+const TILT_GAIN = 0.035; // ≈2° at full deflection — juicy, never violent
 
 export interface Slosh {
   /** kick the modes with window acceleration (CSS px/s²) */

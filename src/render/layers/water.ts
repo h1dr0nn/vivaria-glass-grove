@@ -22,34 +22,26 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
   const overlay = new Container();
   const { waterlineY, width } = tank;
 
-  if (waterlineY > 0) {
-    const regions = waterRuns(tank);
+  const regions = waterRuns(tank);
 
-    const body = new Graphics();
-    const gradient = new FillGradient({
-      type: "linear",
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      colorStops: [
-        { offset: 0, color: SCENE.waterSurface },
-        { offset: 0.4, color: SCENE.waterShallow },
-        { offset: 1, color: SCENE.waterDeep },
-      ],
-      textureSpace: "local",
-    });
-    for (const run of regions) {
-      tracePolygon(body, tank, layout, run);
-      body.fill(gradient);
-    }
-    behind.addChild(body);
-
-    const tint = new Graphics();
-    for (const run of regions) {
-      tracePolygon(tint, tank, layout, run);
-      tint.fill({ color: SCENE.waterTintOverlay, alpha: 0.22 });
-    }
-    overlay.addChild(tint);
-  }
+  // The water BODY and its tint are retraced every tick with their top edge
+  // following the LIVE surface curve — a static flat top would peek out (or
+  // leave a gap) whenever a strong slosh tilts the surface past it.
+  const body = new Graphics();
+  behind.addChild(body);
+  const bodyGradient = new FillGradient({
+    type: "linear",
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 1 },
+    colorStops: [
+      { offset: 0, color: SCENE.waterSurface },
+      { offset: 0.4, color: SCENE.waterShallow },
+      { offset: 1, color: SCENE.waterDeep },
+    ],
+    textureSpace: "local",
+  });
+  const tint = new Graphics();
+  overlay.addChild(tint);
 
   // The whole visible surface — oblique top band, far specular, near line —
   // is ONE living assembly, redrawn together every ambient tick: it breathes
@@ -80,9 +72,30 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
     return deepest <= waterlineY - 2;
   });
 
+  /** trace a run: live top edge → down the bank → back along the floor */
+  const traceWithTop = (
+    g: Graphics,
+    run: WaterRun,
+    topY: (x: number) => number,
+  ): void => {
+    g.moveTo(screenX(layout, run.start), topY(run.start));
+    for (let x = run.start + 2; x <= run.end + 1; x += 2) {
+      const cx = Math.min(x, run.end);
+      g.lineTo(screenX(layout, cx), topY(cx));
+    }
+    for (let x = run.end - 1; x >= run.start; x--) {
+      const floor = screenY(layout, tank.terrainHeight[x]);
+      g.lineTo(screenX(layout, x + 1), floor);
+      g.lineTo(screenX(layout, x), floor);
+    }
+    g.closePath();
+  };
+
   const ripple = (phase: number, slosh?: SloshReading): void => {
     surfaceBand.clear();
     surfaceLine.clear();
+    body.clear();
+    tint.clear();
     if (waterlineY <= 0) return;
     const baseY = screenY(layout, waterlineY);
     const tiltSpan = slosh ? Math.tan(slosh.tilt) * layout.tankWidthPx : 0;
@@ -106,6 +119,14 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       bob * 0.85 +
       Math.sin(phase + phaseShift + x * 0.22 + 0.9) * amplitude * 0.8 +
       layout.depthY;
+
+    // body + tint first — the surface assembly draws over their top edge
+    for (const run of regions) {
+      traceWithTop(body, run, frontY);
+      body.fill(bodyGradient);
+      traceWithTop(tint, run, frontY);
+      tint.fill({ color: SCENE.waterTintOverlay, alpha: 0.22 });
+    }
 
     for (const run of bandRuns) {
       const front: number[] = [];
@@ -184,20 +205,3 @@ function waterRuns(tank: TankState): WaterRun[] {
   return runs;
 }
 
-/** Surface edge across the run, then back along the stepped terrain floor. */
-function tracePolygon(
-  g: Graphics,
-  tank: TankState,
-  layout: TankLayout,
-  run: WaterRun,
-): void {
-  const top = screenY(layout, tank.waterlineY);
-  g.moveTo(screenX(layout, run.start), top);
-  g.lineTo(screenX(layout, run.end), top);
-  for (let x = run.end - 1; x >= run.start; x--) {
-    const floor = screenY(layout, tank.terrainHeight[x]);
-    g.lineTo(screenX(layout, x + 1), floor);
-    g.lineTo(screenX(layout, x), floor);
-  }
-  g.closePath();
-}
