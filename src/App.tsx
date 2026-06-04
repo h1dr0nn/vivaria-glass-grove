@@ -9,6 +9,13 @@ import { advanceSim, createInitialSimState } from "./sim/integrate";
 import { populationFor } from "./sim/species";
 import type { SimEvent, SimState } from "./sim/types";
 import { createGameLoop, type GameLoop } from "./game/loop";
+import {
+  bindAudioVisibility,
+  loadMutePreference,
+  playChime,
+  startAmbient,
+  stopAmbient,
+} from "./audio/engine";
 import { createStorage } from "./persistence/storage";
 import { buildSave, parseSave, restoreSim } from "./persistence/saves";
 import type { SaveData } from "./persistence/saveSchema";
@@ -87,6 +94,8 @@ export default function App() {
     const newSightings = recordSightings(population, simState.simTimeMs);
     view?.update(simState, population);
     markDirty();
+    if (events.length > 0) playChime(true);
+    else if (newSightings) playChime(false);
     // milestones and first sightings are precious — save immediately
     if (events.length > 0 || newSightings) persist();
   };
@@ -120,6 +129,11 @@ export default function App() {
 
     clearInterval(autosaveInterval);
     autosaveInterval = setInterval(persist, AUTOSAVE_MS);
+
+    startAmbient({
+      waterAmount: newTank.env.waterFraction,
+      landAmount: newTank.landPercent / 100,
+    });
   };
 
   const startNewGame = (seed: number, land: number, simHours = 0): void => {
@@ -173,6 +187,7 @@ export default function App() {
 
   const backToMenu = (): void => {
     persist();
+    stopAmbient();
     loop?.stop();
     loop = undefined;
     clearInterval(ambientInterval);
@@ -204,6 +219,8 @@ export default function App() {
 
   onMount(() => {
     if (!host) return;
+    loadMutePreference();
+    bindAudioVisibility();
     void (async () => {
       await createPixiApp(host!);
       await loadSavedGame();
@@ -216,6 +233,28 @@ export default function App() {
     const onBeforeUnload = (): void => persist();
     window.addEventListener("beforeunload", onBeforeUnload);
     onCleanup(() => window.removeEventListener("beforeunload", onBeforeUnload));
+
+    // rebuild the scene when the window is resized (debounced)
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const currentSim = loop?.current() ?? sim();
+        if (!view || !activeTank || !currentSim) return;
+        const app = getApp();
+        view.destroy();
+        view = buildTankView(
+          app.stage,
+          activeTank,
+          app.screen.width,
+          app.screen.height,
+        );
+        view.update(currentSim, populationFor(activeTank, currentSim));
+        markDirty();
+      }, 250);
+    });
+    observer.observe(host);
+    onCleanup(() => observer.disconnect());
   });
 
   onCleanup(() => {

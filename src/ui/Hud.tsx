@@ -1,4 +1,5 @@
-import { Show } from "solid-js";
+import { Show, createSignal } from "solid-js";
+import { isMuted, setMuted } from "../audio/engine";
 import {
   PHASE_INFO,
   formatSimAge,
@@ -21,6 +22,14 @@ const ARCHETYPE_LABEL: Record<string, string> = {
 };
 
 export default function Hud(props: HudProps) {
+  const [muted, setMutedSignal] = createSignal(isMuted());
+
+  const toggleMute = (): void => {
+    const next = !muted();
+    setMuted(next);
+    setMutedSignal(next);
+  };
+
   return (
     <Show when={sim() && tank()}>
       <div class="hud-top">
@@ -34,6 +43,15 @@ export default function Hud(props: HudProps) {
           <span class="hud-age">{formatSimAge(sim()!.simTimeMs)}</span>
         </div>
         <div class="hud-actions">
+          <button
+            type="button"
+            class="hud-button"
+            onClick={toggleMute}
+            title={muted() ? "Unmute" : "Mute"}
+            aria-label={muted() ? "Unmute sounds" : "Mute sounds"}
+          >
+            {muted() ? "🔇" : "🔊"}
+          </button>
           <button
             type="button"
             class="hud-button"
