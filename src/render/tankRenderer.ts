@@ -14,21 +14,50 @@ import { buildWater } from "./layers/water";
 const HOUR_MS = 3_600_000;
 /** worlds begin in the morning light */
 const DAY_START_OFFSET_HOURS = 9;
-const NIGHT_COLOR = 0x1e2c45;
-const NIGHT_MAX_ALPHA = 0.3;
 
-function smooth01(t: number): number {
-  const c = Math.min(1, Math.max(0, t));
-  return c * c * (3 - 2 * c);
-}
+/**
+ * Time-of-day LIGHT TEMPERATURE — never a darkening overlay (user feedback:
+ * dark patches feel unpleasant). The single warm-grade ColorMatrixFilter is
+ * driven through gentle keyframes: noon neutral-warm, dusk amber, night a
+ * soft moonlit cool (hue shift only), dawn faintly pink.
+ * Each frame: [rGain, gGain, bGain, rOffset, bOffset].
+ */
+type GradeFrame = readonly [number, number, number, number, number];
 
-/** 0 at midday, 1 deep at night, soft dusk/dawn ramps. */
-function nightStrength(simTimeMs: number): number {
-  const hour = (simTimeMs / HOUR_MS + DAY_START_OFFSET_HOURS) % 24;
-  if (hour >= 7 && hour < 18) return 0;
-  if (hour >= 18 && hour < 22) return smooth01((hour - 18) / 4);
-  if (hour >= 22 || hour < 4) return 1;
-  return 1 - smooth01((hour - 4) / 3);
+const GRADE_NOON: GradeFrame = [1.05, 1.0, 0.94, 0.012, 0];
+const GRADE_DUSK: GradeFrame = [1.12, 0.97, 0.86, 0.028, -0.008];
+const GRADE_NIGHT: GradeFrame = [0.94, 0.98, 1.08, -0.004, 0.022];
+const GRADE_DAWN: GradeFrame = [1.08, 0.98, 0.95, 0.02, 0.004];
+
+/** keyframes around the 24h wheel (hour, frame) — lerped piecewise */
+const GRADE_KEYS: ReadonlyArray<readonly [number, GradeFrame]> = [
+  [5, GRADE_DAWN],
+  [11, GRADE_NOON],
+  [17, GRADE_NOON],
+  [20.5, GRADE_DUSK],
+  [23.5, GRADE_NIGHT],
+  [29, GRADE_DAWN], // wraps to 5 next day
+];
+
+function gradeForTime(simTimeMs: number): GradeFrame {
+  let hour = (simTimeMs / HOUR_MS + DAY_START_OFFSET_HOURS) % 24;
+  if (hour < GRADE_KEYS[0][0]) hour += 24;
+  for (let i = 0; i < GRADE_KEYS.length - 1; i++) {
+    const [h0, f0] = GRADE_KEYS[i];
+    const [h1, f1] = GRADE_KEYS[i + 1];
+    if (hour >= h0 && hour <= h1) {
+      const t = (hour - h0) / (h1 - h0);
+      const ease = t * t * (3 - 2 * t);
+      return [
+        f0[0] + (f1[0] - f0[0]) * ease,
+        f0[1] + (f1[1] - f0[1]) * ease,
+        f0[2] + (f1[2] - f0[2]) * ease,
+        f0[3] + (f1[3] - f0[3]) * ease,
+        f0[4] + (f1[4] - f0[4]) * ease,
+      ];
+    }
+  }
+  return GRADE_NOON;
 }
 
 export interface TankView {
@@ -80,28 +109,24 @@ export function buildTankView(
     .fill(0xffffff);
   contents.mask = contentsMask;
 
-  // the slow indigo of night, laid over the whole scene
-  const night = new Graphics();
-  night.rect(0, 0, viewWidth, viewHeight).fill(NIGHT_COLOR);
-  night.alpha = 0;
-
   root.addChild(
     buildBackdrop(viewWidth, viewHeight, layout),
     glass.back,
     contents,
     contentsMask,
     glass.front,
-    night,
   );
 
   const grade = new ColorMatrixFilter();
-  // gentle amber lift: warm highlights, slightly tucked blues - no blowout
-  grade.matrix = [
-    1.05, 0, 0, 0, 0.012,
-    0, 1.0, 0, 0, 0.006,
-    0, 0, 0.94, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
+  const applyGrade = (frame: GradeFrame): void => {
+    grade.matrix = [
+      frame[0], 0, 0, 0, frame[3],
+      0, frame[1], 0, 0, 0.006,
+      0, 0, frame[2], 0, frame[4],
+      0, 0, 0, 1, 0,
+    ];
+  };
+  applyGrade(GRADE_NOON);
   root.filters = [grade];
 
   stage.addChild(root);
@@ -113,7 +138,7 @@ export function buildTankView(
     update(sim: SimState, population: readonly PopulationEntry[]): void {
       flora.update(sim);
       creatures.update(population);
-      night.alpha = NIGHT_MAX_ALPHA * nightStrength(sim.simTimeMs);
+      applyGrade(gradeForTime(sim.simTimeMs));
     },
     tickAmbient(timeMs: number): void {
       const dt =
