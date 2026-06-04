@@ -21,16 +21,27 @@ export function placeHardscape(
   const rng = mulberry32(splitSeed(seed, STREAMS.hardscape));
   const pieces: HardscapePiece[] = [];
 
+  const isValid = (piece: HardscapePiece): boolean =>
+    piece.y + piece.halfHeight < usableHeight &&
+    isFlatEnough(terrain, piece.x, piece.halfWidth);
+
   const rockCount = 1 + Math.floor(rng() * 3);
   for (let r = 0; r < rockCount; r++) {
-    const piece = tryPlace(rng, pieces, width, (x) => ({
-      kind: "rock" as const,
-      x,
-      y: terrain[x],
-      halfWidth: 3 + Math.floor(rng() * 4),
-      halfHeight: 2 + Math.floor(rng() * 2),
-    }));
-    if (piece && piece.y + piece.halfHeight < usableHeight) pieces.push(piece);
+    const piece = tryPlace(
+      rng,
+      pieces,
+      width,
+      (x) => ({
+        kind: "rock" as const,
+        x,
+        y: terrain[x],
+        halfWidth: 3 + Math.floor(rng() * 4),
+        halfHeight: 2 + Math.floor(rng() * 2),
+      }),
+      null,
+      isValid,
+    );
+    if (piece) pieces.push(piece);
   }
 
   const woodCount = rng() < 0.65 ? 1 : 2;
@@ -49,11 +60,29 @@ export function placeHardscape(
         halfHeight: 1 + Math.floor(rng() * 2),
       }),
       pickFrom,
+      isValid,
     );
-    if (piece && piece.y + piece.halfHeight < usableHeight) pieces.push(piece);
+    if (piece) pieces.push(piece);
   }
 
   return pieces;
+}
+
+/** Hardscape must rest on ground, never float beside a slope. */
+function isFlatEnough(
+  terrain: readonly number[],
+  x: number,
+  halfWidth: number,
+): boolean {
+  const x0 = Math.max(0, x - halfWidth);
+  const x1 = Math.min(terrain.length - 1, x + halfWidth);
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (let i = x0; i <= x1; i++) {
+    min = Math.min(min, terrain[i]);
+    max = Math.max(max, terrain[i]);
+  }
+  return max - min <= 3;
 }
 
 function collectShoreColumns(
@@ -75,6 +104,7 @@ function tryPlace(
   width: number,
   make: (x: number) => HardscapePiece,
   candidates: readonly number[] | null = null,
+  isValid: (piece: HardscapePiece) => boolean = () => true,
 ): HardscapePiece | null {
   for (let attempt = 0; attempt < PLACEMENT_TRIES; attempt++) {
     const x = candidates
@@ -83,7 +113,9 @@ function tryPlace(
     const tooClose = existing.some(
       (p) => Math.abs(p.x - x) < MIN_PIECE_DISTANCE,
     );
-    if (!tooClose) return make(x);
+    if (tooClose) continue;
+    const piece = make(x);
+    if (isValid(piece)) return piece;
   }
   return null;
 }

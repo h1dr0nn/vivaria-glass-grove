@@ -53,9 +53,13 @@ export function generateTerrain(
   );
 
   const landOnRight = rng() < 0.5;
-  const blend = 0.1 + rng() * 0.08;
   const edge = 1 - p; // land occupies u > edge
-  const amplitude = lerp(0.035, 0.1, p) * usableHeight;
+  // Slope discipline: the climb from basin to plateau must read as a gentle
+  // bank (≲45°), so the blend width scales with the height it has to cover.
+  const heightDelta = Math.max(1, landTop - basinFloor);
+  const slopeColumns = heightDelta * (1.3 + rng() * 0.5);
+  const blend = Math.min(0.45, Math.max(0.12, slopeColumns / width));
+  const amplitude = lerp(0.04, 0.085, p) * usableHeight;
   const frequency = 0.02 + rng() * 0.014;
   const noiseSeed = splitSeed(seed, STREAMS.terrain) ^ 0x5bd1e995;
 
@@ -64,7 +68,8 @@ export function generateTerrain(
     const t = x / (width - 1);
     const u = landOnRight ? t : 1 - t;
     const bias = p <= 0 ? 0 : smoothstep((u - edge) / blend + 0.5);
-    const n = fbm1D(noiseSeed, x * frequency) * 2 - 1;
+    // rolling hills on land, calmer floor under water
+    const n = (fbm1D(noiseSeed, x * frequency) * 2 - 1) * (0.45 + 0.75 * bias);
     const h = Math.round(
       basinFloor + bias * (landTop - basinFloor) + n * amplitude,
     );
