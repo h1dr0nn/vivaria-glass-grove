@@ -4,6 +4,7 @@ import type { PopulationEntry } from "../sim/species";
 import type { TankState } from "../sim/tankgen";
 import { createSlosh } from "./slosh";
 import { computeLayout } from "./layout";
+import { buildAir } from "./layers/air";
 import { buildBackdrop } from "./layers/backdrop";
 import { buildCreatures } from "./layers/creatures";
 import { buildFlora } from "./layers/flora";
@@ -26,7 +27,7 @@ type GradeFrame = readonly [number, number, number, number, number];
 
 const GRADE_NOON: GradeFrame = [1.05, 1.0, 0.94, 0.012, 0];
 const GRADE_DUSK: GradeFrame = [1.12, 0.97, 0.86, 0.028, -0.008];
-const GRADE_NIGHT: GradeFrame = [0.94, 0.98, 1.08, -0.004, 0.022];
+const GRADE_NIGHT: GradeFrame = [0.82, 0.9, 1.12, -0.012, 0.032];
 const GRADE_DAWN: GradeFrame = [1.08, 0.98, 0.95, 0.02, 0.004];
 
 /** keyframes around the 24h wheel (hour, frame) — lerped piecewise */
@@ -91,6 +92,7 @@ export function buildTankView(
   const water = buildWater(tank, layout);
   const flora = buildFlora(tank, layout);
   const creatures = buildCreatures(tank, layout);
+  const air = buildAir(tank, layout);
   const glass = buildGlass(layout);
 
   // everything INSIDE the tank clips to the rounded glass interior -
@@ -102,6 +104,7 @@ export function buildTankView(
     buildSubstrate(tank, layout),
     flora.container,
     creatures.container,
+    air.container,
     water.overlay,
   );
   const contentsMask = new Graphics()
@@ -138,6 +141,7 @@ export function buildTankView(
     update(sim: SimState, population: readonly PopulationEntry[]): void {
       flora.update(sim);
       creatures.update(population);
+      air.update(sim);
       applyGrade(gradeForTime(sim.simTimeMs));
     },
     tickAmbient(timeMs: number): void {
@@ -148,6 +152,7 @@ export function buildTankView(
       lastAmbientMs = timeMs;
       slosh.step(dt);
       flora.tick(timeMs);
+      air.tick(timeMs);
       water.ripple(timeMs / 700, slosh.read());
     },
     tickCreatures(timeMs: number): void {

@@ -34,11 +34,11 @@ describe("environmentAt — deterministic season + weather", () => {
     expect(environmentAt(7, 5 * DAY_MS)).toEqual(environmentAt(7, 5 * DAY_MS));
   });
 
-  test("growth multiplier stays gently bounded", () => {
+  test("growth multiplier stays bounded (season ±0.35 × weather)", () => {
     for (let d = 0; d < 120; d++) {
       const g = environmentAt(42, d * DAY_MS).growthMul;
-      expect(g).toBeGreaterThan(0.7);
-      expect(g).toBeLessThan(1.4);
+      expect(g).toBeGreaterThan(0.5);
+      expect(g).toBeLessThan(1.55);
     }
   });
 

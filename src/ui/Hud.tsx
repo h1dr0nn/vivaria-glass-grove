@@ -14,6 +14,7 @@ import {
   SPEED_STEPS,
   formatSimAge,
   nextMilestone,
+  seasonWeatherLabel,
   setAlmanacOpen,
   setTimePaused,
   setTimeSpeed,
@@ -77,6 +78,8 @@ export default function Hud(props: HudProps) {
           <span class="hud-phase">{PHASE_INFO[sim()!.phase].name}</span>
           <span class="hud-divider" aria-hidden="true" />
           <span class="hud-age">{formatSimAge(sim()!.simTimeMs)}</span>
+          <span class="hud-divider" aria-hidden="true" />
+          <span class="hud-season">{seasonWeatherLabel(sim()!)}</span>
           <Show when={upNext()}>
             {(milestone) => (
               <>

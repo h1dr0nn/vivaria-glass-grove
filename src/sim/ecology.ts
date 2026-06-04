@@ -153,8 +153,8 @@ export function environmentAt(seed: number, simTimeMs: number): EnvironmentReadi
   const dayIndex = Math.floor(simTimeMs / (HOURS_PER_DAY * 3_600_000));
   const seasonPhase = ((dayIndex % SEASON_DAYS) / SEASON_DAYS + 1) % 1;
   const seasonName = SEASON_NAMES[Math.floor(seasonPhase * 4) % 4];
-  // summer warm, winter cool — a gentle ±0.18 swing
-  const seasonMul = 1 + 0.18 * Math.sin(seasonPhase * Math.PI * 2);
+  // a real seasonal swing the player can SEE — lush summer, sparse winter
+  const seasonMul = 1 + 0.35 * Math.sin(seasonPhase * Math.PI * 2);
   const roll = tickRandom(seed, dayIndex, STREAM.weather);
   const weather = WEATHERS[Math.min(WEATHERS.length - 1, Math.floor(roll * WEATHERS.length))];
   return {

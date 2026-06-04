@@ -3,6 +3,7 @@ import type { SimEvent, SimState, SuccessionPhase } from "../sim/types";
 import type { TankState } from "../sim/tankgen";
 import type { SaveData } from "../persistence/saveSchema";
 import { DEFAULT_TUNABLES } from "../sim/tunables";
+import { environmentAt } from "../sim/ecology";
 
 /** Central UI state - Solid signals, near-zero idle work. */
 
@@ -154,6 +155,19 @@ export function resetGameState(): void {
   setAlmanacOpen(false);
 }
 
+const SEASON_LABEL: Record<string, string> = {
+  spring: "Spring",
+  summer: "Summer",
+  autumn: "Autumn",
+  winter: "Winter",
+};
+
+/** Season + weather for the HUD chip, from the current sim time. */
+export function seasonWeatherLabel(state: SimState): string {
+  const env = environmentAt(state.seed, state.simTimeMs);
+  return `${SEASON_LABEL[env.seasonName] ?? env.seasonName} · ${env.weather}`;
+}
+
 /** What the world is reaching toward - makes the next clock legible. */
 export function nextMilestone(
   state: SimState,
@@ -185,16 +199,26 @@ export function nextMilestone(
   }
 }
 
-/** "Day 3 · 04:12:36" from sim time - a clock the player can watch run. */
+/** worlds open in the morning — the clock & lighting share this offset */
+export const DAY_START_OFFSET_MS = 9 * 3_600_000;
+
+/**
+ * "Day 3 · 04:12:36" — the displayed clock matches what the player SEES
+ * (same day-start offset the renderer's light cycle uses), so "20:00" is
+ * actually dusk on screen, not a bright afternoon.
+ */
 export function formatSimAge(simTimeMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(simTimeMs / 1000));
+  const totalSeconds = Math.max(
+    0,
+    Math.floor((simTimeMs + DAY_START_OFFSET_MS) / 1000),
+  );
   const seconds = totalSeconds % 60;
   const minutes = Math.floor(totalSeconds / 60) % 60;
   const hours = Math.floor(totalSeconds / 3600) % 24;
   const days = Math.floor(totalSeconds / 86_400);
   const pad = (n: number): string => String(n).padStart(2, "0");
   const clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  return days <= 0 ? clock : `Day ${days + 1} · ${clock}`;
+  return `Day ${days + 1} · ${clock}`;
 }
 
 /** Time controls - session-level, wired to the game loop by App. */
