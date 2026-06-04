@@ -350,3 +350,33 @@ export function abundanceOf(eco: EcoState | undefined, id: string): number {
 export function isEcoSpecies(id: string): id is EcoSpeciesId {
   return (ECO_SPECIES as readonly string[]).includes(id);
 }
+
+/** reserved tickRandom streams for the long-horizon gates */
+export const ECO_STREAM = { visitor: 300, variant: 400 } as const;
+
+const BIODIVERSITY_FLOOR = 0.06;
+
+/** how many resident species the web currently sustains — drives late guilds */
+export function biodiversityOf(eco: EcoState | undefined): number {
+  if (!eco) return 0;
+  let n = 0;
+  for (const id of ECO_SPECIES) {
+    if (eco.pop[id] >= BIODIVERSITY_FLOOR) n++;
+  }
+  return n;
+}
+
+const HOUR_MS_ = 3_600_000;
+const NIGHT_OFFSET_HOURS = 9;
+
+/** true in the deep-night window (matches the renderer's light cycle) */
+export function isNight(simTimeMs: number): boolean {
+  const hour = (simTimeMs / HOUR_MS_ + NIGHT_OFFSET_HOURS) % 24;
+  return hour >= 20 || hour < 6;
+}
+
+/** a once-per-day deterministic rare-visitor roll */
+export function visitorRoll(seed: number, simTimeMs: number, stream: number): number {
+  const dayIndex = Math.floor(simTimeMs / (HOURS_PER_DAY * HOUR_MS_));
+  return tickRandom(seed, dayIndex, stream);
+}

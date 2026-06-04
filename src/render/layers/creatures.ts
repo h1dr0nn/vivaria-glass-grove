@@ -450,10 +450,17 @@ function animate(
       c.container.rotation = flicking ? -0.25 * c.dir : 0;
       break;
     }
-    case "meadow-moth": {
-      const flap = 0.35 + Math.abs(Math.sin(time * 11 + c.phase)) * 0.75;
+    case "meadow-moth":
+    case "mayfly":
+    case "mason-bee":
+    case "dragonfly": {
+      const rate = c.def.id === "mason-bee" || c.def.id === "dragonfly" ? 22 : 11;
+      const flap = 0.3 + Math.abs(Math.sin(time * rate + c.phase)) * 0.8;
       if (parts.wingLeft) parts.wingLeft.scale.y = flap;
       if (parts.wingRight) parts.wingRight.scale.y = flap;
+      if (c.def.id === "dragonfly") {
+        c.container.rotation = Math.sin(time * 2 + c.phase) * 0.12;
+      }
       break;
     }
     case "fiddler-crab": {
@@ -488,23 +495,38 @@ function animate(
         c.action > 0 ? Math.sin(time * 3 + c.phase) * 0.02 : -0.08 * c.dir;
       break;
     }
-    case "detritus-worm": {
+    case "detritus-worm":
+    case "land-planarian": {
       if (parts.redraw) {
         const g = parts.redraw;
         const s = layout.scale * c.def.size;
+        const thick = c.def.id === "land-planarian";
         g.clear();
         g.moveTo(-s * 0.5, 0);
-        for (let i = 1; i <= 4; i++) {
+        const segs = thick ? 6 : 4;
+        for (let i = 1; i <= segs; i++) {
           g.lineTo(
-            -s * 0.5 + (i / 4) * s,
-            Math.sin(time * 2 + c.phase + i) * s * 0.18,
+            -s * 0.5 + (i / segs) * s,
+            Math.sin(time * (thick ? 1.4 : 2) + c.phase + i * 0.8) * s * 0.16,
           );
         }
         g.stroke({
           color: c.def.color,
-          width: Math.max(0.8, s * 0.18),
-          alpha: 0.85,
+          width: Math.max(0.8, s * (thick ? 0.32 : 0.18)),
+          alpha: 0.9,
+          cap: "round",
         });
+        if (thick) {
+          // a faint hammerhead at the leading end
+          g.circle(s * 0.5, 0, s * 0.22).fill({ color: c.def.accent, alpha: 0.85 });
+        }
+      }
+      break;
+    }
+    case "heron": {
+      // a slow, occasional head-tilt — otherwise statue-still
+      if (parts.head) {
+        parts.head.rotation = Math.sin(time * 0.3 + c.phase) * 0.18;
       }
       break;
     }
@@ -543,10 +565,28 @@ function buildBody(
       break;
     case "dwarf-isopod":
     case "leaf-beetle":
+    case "velvet-mite":
+    case "whirligig":
       parts = buildBug(container, s, def.color, def.accent);
       break;
     case "meadow-moth":
+    case "mayfly":
       parts = buildMoth(container, s, def.color, def.accent);
+      break;
+    case "mason-bee":
+      parts = buildBee(container, s, def.color, def.accent);
+      break;
+    case "dragonfly":
+      parts = buildDragonfly(container, s, def.color, def.accent);
+      break;
+    case "land-planarian": {
+      const redraw = new Graphics();
+      container.addChild(redraw);
+      parts = { redraw };
+      break;
+    }
+    case "heron":
+      parts = buildHeron(container, s, def.color, def.accent);
       break;
     case "detritus-worm": {
       const redraw = new Graphics();
@@ -773,5 +813,109 @@ function buildTurtle(
     .roundRect(-s * 0.5, -s * 0.16, s, s * 0.1, s * 0.05)
     .fill({ color: 0xd9c69c, alpha: 0.8 });
   container.addChild(shell);
+  return { head, legs };
+}
+
+function buildBee(
+  container: Container,
+  s: number,
+  color: number,
+  accent: number,
+): CreatureParts {
+  const wingLeft = new Graphics();
+  wingLeft.ellipse(-s * 0.2, -s * 0.2, s * 0.3, s * 0.18).fill({
+    color: 0xeaf2f4,
+    alpha: 0.55,
+  });
+  const wingRight = new Graphics();
+  wingRight.ellipse(s * 0.2, -s * 0.2, s * 0.3, s * 0.18).fill({
+    color: 0xeaf2f4,
+    alpha: 0.55,
+  });
+  const body = new Graphics();
+  body.ellipse(0, 0, s * 0.42, s * 0.28).fill({ color, alpha: 0.97 });
+  for (let i = -1; i <= 1; i++) {
+    body
+      .rect(i * s * 0.18 - s * 0.04, -s * 0.22, s * 0.08, s * 0.44)
+      .fill({ color: accent, alpha: 0.8 });
+  }
+  container.addChild(wingLeft, wingRight, body);
+  return { wingLeft, wingRight };
+}
+
+function buildDragonfly(
+  container: Container,
+  s: number,
+  color: number,
+  accent: number,
+): CreatureParts {
+  // two pairs of long glassy wings, crossed
+  const wingLeft = new Graphics();
+  const wingRight = new Graphics();
+  for (const [w, sign] of [
+    [wingLeft, -1],
+    [wingRight, 1],
+  ] as const) {
+    w.ellipse(sign * s * 0.4, -s * 0.1, s * 0.55, s * 0.14).fill({
+      color: 0xdfeef2,
+      alpha: 0.5,
+    });
+    w.ellipse(sign * s * 0.34, s * 0.06, s * 0.48, s * 0.12).fill({
+      color: 0xdfeef2,
+      alpha: 0.45,
+    });
+  }
+  const body = new Graphics();
+  // long thin abdomen
+  body.roundRect(-s * 0.1, -s * 0.55, s * 0.2, s * 1.2, s * 0.08).fill({
+    color,
+    alpha: 0.97,
+  });
+  body.circle(0, -s * 0.55, s * 0.18).fill({ color: accent, alpha: 0.97 });
+  body.circle(s * 0.07, -s * 0.6, s * 0.06).fill({ color: 0x10242a });
+  container.addChild(wingLeft, wingRight, body);
+  return { wingLeft, wingRight };
+}
+
+function buildHeron(
+  container: Container,
+  s: number,
+  color: number,
+  accent: number,
+): CreatureParts {
+  const legs: Graphics[] = [];
+  for (const lx of [-0.12, 0.12]) {
+    const leg = new Graphics();
+    leg.rect(-s * 0.02, 0, s * 0.04, s * 0.7).fill({ color: accent, alpha: 0.9 });
+    leg.position.set(lx * s, -s * 0.7);
+    container.addChild(leg);
+    legs.push(leg);
+  }
+  const body = new Graphics();
+  // plump body
+  body.ellipse(0, -s * 0.85, s * 0.32, s * 0.42).fill({ color, alpha: 0.97 });
+  // folded wing shading
+  body.ellipse(s * 0.06, -s * 0.8, s * 0.24, s * 0.34).fill({
+    color: accent,
+    alpha: 0.5,
+  });
+  container.addChild(body);
+  // long S-neck + head on a pivot, so it can do a slow head-tilt
+  const head = new Graphics();
+  head
+    .moveTo(0, 0)
+    .quadraticCurveTo(-s * 0.35, -s * 0.5, -s * 0.05, -s * 0.95)
+    .stroke({ color, width: Math.max(1.5, s * 0.14), alpha: 0.97 });
+  head.ellipse(-s * 0.05, -s * 1.0, s * 0.14, s * 0.1).fill({
+    color,
+    alpha: 0.97,
+  });
+  // dagger beak
+  head
+    .poly([-s * 0.16, -s * 1.0, -s * 0.5, -s * 0.92, -s * 0.16, -s * 0.94])
+    .fill({ color: 0xd8b24a, alpha: 0.95 });
+  head.circle(-s * 0.1, -s * 1.02, s * 0.03).fill({ color: 0x10242a });
+  head.position.set(0, -s * 1.2);
+  container.addChild(head);
   return { head, legs };
 }

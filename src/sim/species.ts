@@ -1,6 +1,15 @@
 ﻿import type { SimState, TierId } from "./types";
 import type { TankState } from "./tankgen";
-import { abundanceOf, isEcoSpecies, worldHasSpecies } from "./ecology";
+import {
+  ECO_STREAM,
+  abundanceOf,
+  biodiversityOf,
+  environmentAt,
+  isEcoSpecies,
+  isNight,
+  visitorRoll,
+  worldHasSpecies,
+} from "./ecology";
 
 /**
  * Species roster - pure data + a pure population function.
@@ -23,6 +32,29 @@ export type Movement =
   | "fly"
   | "amble";
 
+/**
+ * Long-horizon unlock gate. Stacking these orthogonal axes on top of the
+ * succession tier keeps "first sighting" beats firing far past climax —
+ * seasonal-only flyers, weather blooms, late predator/visitor guilds that
+ * only a mature, diverse, lucky world ever surfaces. All pure from
+ * (seed, simTime, eco, env) so a long fast-forward reveals them on schedule.
+ */
+export type UnlockGate =
+  | { readonly kind: "tier" }
+  | { readonly kind: "biodiversity"; readonly min: number }
+  | { readonly kind: "season"; readonly seasons: readonly string[] }
+  | { readonly kind: "night" }
+  | { readonly kind: "weather"; readonly weathers: readonly string[] }
+  | { readonly kind: "plants"; readonly min: number }
+  | {
+      readonly kind: "visitor";
+      readonly chancePerDay: number;
+      readonly stream: number;
+      readonly requiresBiodiversity?: number;
+      readonly requiresSpecies?: string;
+    }
+  | { readonly kind: "all"; readonly of: readonly UnlockGate[] };
+
 export interface SpeciesDef {
   readonly id: string;
   readonly name: string;
@@ -40,6 +72,8 @@ export interface SpeciesDef {
   readonly color: number;
   readonly accent: number;
   readonly movement: Movement;
+  /** extra gate beyond the tier threshold (default: tier only) */
+  readonly unlock?: UnlockGate;
 }
 
 export const SPECIES: readonly SpeciesDef[] = [
@@ -256,6 +290,142 @@ export const SPECIES: readonly SpeciesDef[] = [
     accent: 0xc9b888,
     movement: "fly",
   },
+  // ---- long-horizon arrivals: render-only, gated so they surface late ----
+  {
+    id: "velvet-mite",
+    name: "Velvet mites",
+    blurb: "Plush crimson dots that bloom across the damp after rain.",
+    tier: "plants",
+    threshold: 0.4,
+    minLand: 20,
+    maxLand: 100,
+    habitat: "land",
+    maxCount: 6,
+    size: 1.0,
+    color: 0xc02828,
+    accent: 0x8c1d1d,
+    movement: "scuttle",
+    unlock: { kind: "weather", weathers: ["rainy", "muggy"] },
+  },
+  {
+    id: "whirligig",
+    name: "Whirligig beetles",
+    blurb: "Black pearls tracing loops on a bright summer surface.",
+    tier: "plants",
+    threshold: 0.45,
+    minLand: 5,
+    maxLand: 80,
+    habitat: "shore",
+    maxCount: 5,
+    size: 0.9,
+    color: 0x2b2b30,
+    accent: 0x4a4a52,
+    movement: "scuttle",
+    unlock: {
+      kind: "all",
+      of: [
+        { kind: "season", seasons: ["summer"] },
+        { kind: "weather", weathers: ["sunny", "clear"] },
+      ],
+    },
+  },
+  {
+    id: "mayfly",
+    name: "Mayfly hatch",
+    blurb: "A spring emergence — twin-tailed wings rising over the water.",
+    tier: "plants",
+    threshold: 0.5,
+    minLand: 0,
+    maxLand: 80,
+    habitat: "air",
+    maxCount: 5,
+    size: 1.4,
+    color: 0xf2ead0,
+    accent: 0xcfc4a0,
+    movement: "fly",
+    unlock: { kind: "season", seasons: ["spring"] },
+  },
+  {
+    id: "mason-bee",
+    name: "Mason bee",
+    blurb: "A fuzzy pollinator, here only when the flowers are out.",
+    tier: "plants",
+    threshold: 0.9,
+    minLand: 40,
+    maxLand: 100,
+    habitat: "air",
+    maxCount: 2,
+    size: 1.4,
+    color: 0xd8a23a,
+    accent: 0x4a4640,
+    movement: "fly",
+    unlock: {
+      kind: "all",
+      of: [
+        { kind: "season", seasons: ["spring", "summer"] },
+        { kind: "plants", min: 0.9 },
+      ],
+    },
+  },
+  {
+    id: "dragonfly",
+    name: "Dragonfly",
+    blurb: "A summer hunter, darting and hovering over open water.",
+    tier: "plants",
+    threshold: 0.6,
+    minLand: 0,
+    maxLand: 90,
+    habitat: "air",
+    maxCount: 2,
+    size: 2.6,
+    color: 0x6aa6c0,
+    accent: 0x3f7f96,
+    movement: "fly",
+    unlock: {
+      kind: "all",
+      of: [
+        { kind: "season", seasons: ["summer"] },
+        { kind: "biodiversity", min: 6 },
+      ],
+    },
+  },
+  {
+    id: "land-planarian",
+    name: "Hammerhead worm",
+    blurb: "A slow amber ribbon hunting the mature forest floor.",
+    tier: "plants",
+    threshold: 0.85,
+    minLand: 45,
+    maxLand: 100,
+    habitat: "land",
+    maxCount: 2,
+    size: 2.0,
+    color: 0xc8a060,
+    accent: 0x9a7440,
+    movement: "crawl",
+    unlock: { kind: "biodiversity", min: 6 },
+  },
+  {
+    id: "heron",
+    name: "Grey heron",
+    blurb: "A rare, patient giant stalking the shallows — then gone.",
+    tier: "plants",
+    threshold: 0.5,
+    minLand: 20,
+    maxLand: 80,
+    habitat: "shore",
+    maxCount: 1,
+    size: 9,
+    color: 0xbfc4c0,
+    accent: 0x8a8f8b,
+    movement: "amble",
+    unlock: {
+      kind: "visitor",
+      chancePerDay: 0.04,
+      stream: ECO_STREAM.visitor,
+      requiresBiodiversity: 8,
+    },
+  },
 ] as const;
 
 export interface PopulationEntry {
@@ -272,10 +442,63 @@ export interface PopulationEntry {
  * days). Cozy invariant: a present, above-refuge species always shows ≥1
  * sprite — it never silently reads as "extinct".
  */
+interface UnlockCtx {
+  readonly seed: number;
+  readonly simTimeMs: number;
+  readonly scalar: number;
+  readonly threshold: number;
+  readonly biodiversity: number;
+  readonly season: string;
+  readonly weather: string;
+  readonly night: boolean;
+  readonly plants: number;
+  readonly residents: ReadonlySet<string>;
+}
+
+/** Pure unlock resolver — every branch reads only the deterministic ctx. */
+function isUnlocked(gate: UnlockGate | undefined, ctx: UnlockCtx): boolean {
+  if (!gate || gate.kind === "tier") return ctx.scalar >= ctx.threshold;
+  switch (gate.kind) {
+    case "biodiversity":
+      return ctx.biodiversity >= gate.min;
+    case "season":
+      return gate.seasons.includes(ctx.season);
+    case "night":
+      return ctx.night;
+    case "weather":
+      return gate.weathers.includes(ctx.weather);
+    case "plants":
+      return ctx.plants >= gate.min;
+    case "visitor": {
+      if (gate.requiresBiodiversity && ctx.biodiversity < gate.requiresBiodiversity) {
+        return false;
+      }
+      if (gate.requiresSpecies && !ctx.residents.has(gate.requiresSpecies)) {
+        return false;
+      }
+      return visitorRoll(ctx.seed, ctx.simTimeMs, gate.stream) < gate.chancePerDay;
+    }
+    case "all":
+      return gate.of.every((g) => isUnlocked(g, ctx));
+    default:
+      return false;
+  }
+}
+
 export function populationFor(
   tank: TankState,
   sim: SimState,
 ): PopulationEntry[] {
+  const env = environmentAt(sim.seed, sim.simTimeMs);
+  const biodiversity = biodiversityOf(sim.eco);
+  const night = isNight(sim.simTimeMs);
+  const residents = new Set<string>();
+  for (const d of SPECIES) {
+    if (isEcoSpecies(d.id) && abundanceOf(sim.eco, d.id) >= ECO_VISIBLE_FLOOR) {
+      residents.add(d.id);
+    }
+  }
+
   const entries: PopulationEntry[] = [];
   for (const def of SPECIES) {
     if (tank.landPercent < def.minLand || tank.landPercent > def.maxLand) {
@@ -284,21 +507,33 @@ export function populationFor(
     if (!habitatExists(tank, def.habitat)) continue;
     if (!worldHasSpecies(sim.seed, def.id)) continue;
     const scalar = sim.scalars[def.tier];
-    if (scalar < def.threshold) continue; // tier hasn't unlocked it yet
+    // tier threshold is the baseline for EVERY species (keeps a sterile tank
+    // empty); the unlock gate then layers on season/weather/biodiversity/luck
+    if (scalar < def.threshold) continue;
 
-    const abundance = abundanceOf(sim.eco, def.id);
+    const ctx: UnlockCtx = {
+      seed: sim.seed,
+      simTimeMs: sim.simTimeMs,
+      scalar,
+      threshold: def.threshold,
+      biodiversity,
+      season: env.seasonName,
+      weather: env.weather,
+      night,
+      plants: sim.scalars.plants,
+      residents,
+    };
+    if (!isUnlocked(def.unlock, ctx)) continue;
+
     let count: number;
     if (isEcoSpecies(def.id)) {
+      const abundance = abundanceOf(sim.eco, def.id);
       if (abundance < ECO_VISIBLE_FLOOR) continue; // resting below the floor
-      // map pool 0..1 → 1..maxCount, gently boosted so a healthy pool fills
       const fill = Math.min(1, abundance * 1.6);
       count = Math.max(1, Math.round(def.maxCount * fill));
     } else {
-      const growth = Math.min(
-        1,
-        ((scalar - def.threshold) / Math.max(0.001, 1 - def.threshold)) * 1.4,
-      );
-      count = Math.max(1, Math.round(def.maxCount * growth));
+      // gated arrivals show their full small group while their window is open
+      count = def.maxCount;
     }
     entries.push({ def, count });
   }
