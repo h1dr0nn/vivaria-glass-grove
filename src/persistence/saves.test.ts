@@ -41,7 +41,7 @@ describe("save round-trip", () => {
   });
 });
 
-describe("parseSave — untrusted input", () => {
+describe("parseSave - untrusted input", () => {
   test("rejects malformed JSON", () => {
     expect(parseSave("{ not json")).toBeNull();
     expect(parseSave("")).toBeNull();

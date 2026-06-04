@@ -14,7 +14,7 @@ import {
  *
  * The live tick, the resume catch-up, and tests all call this one pure
  * function. Curves update only on absolute tick boundaries derived from
- * simTimeMs, and randomness is counter-based per tick — therefore
+ * simTimeMs, and randomness is counter-based per tick - therefore
  * N small calls and one batched call produce identical results.
  */
 
@@ -104,7 +104,7 @@ function runTick(
 ): void {
   const dtHours = tunables.tickMs / 3_600_000;
 
-  // Microbes — feed on the sterile substrate, gated by environment only.
+  // Microbes - feed on the sterile substrate, gated by environment only.
   const microbeEnv = envFactorMicrobes(env);
   draft.microbes = growTier(
     draft.microbes,
@@ -115,13 +115,13 @@ function runTick(
     dtHours,
   ).next;
 
-  // Nutrients — produced by microbial decomposition, capped.
+  // Nutrients - produced by microbial decomposition, capped.
   draft.nutrients = Math.min(
     tunables.nutrientMax,
     draft.nutrients + draft.microbes * tunables.nutrientYieldPerHour * dtHours,
   );
 
-  // Algae — gated on microbes + nutrients, consumes nutrients.
+  // Algae - gated on microbes + nutrients, consumes nutrients.
   if (draft.microbes >= tunables.algae.gatePrevTier) {
     const grown = growGatedTier(
       draft,
@@ -135,7 +135,7 @@ function runTick(
     draft.nutrients = Math.max(0, draft.nutrients - grown.consumed);
   }
 
-  // Plants — gated on algae + nutrients, consumes nutrients.
+  // Plants - gated on algae + nutrients, consumes nutrients.
   if (draft.algae >= tunables.plants.gatePrevTier) {
     const grown = growGatedTier(
       draft,
@@ -186,7 +186,7 @@ function growGatedTier(
   let current = draft[id];
   const nutrientFactor =
     tier.nutrientRef <= 0 ? 1 : draft.nutrients / tier.nutrientRef;
-  // Inoculation: the gate opened on a barren tier — life finds a way in,
+  // Inoculation: the gate opened on a barren tier - life finds a way in,
   // but only where conditions actually support it (no spores in dead zones).
   if (current < tier.seedFloor) {
     if (envFactor <= 0 || nutrientFactor <= 0) {

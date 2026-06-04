@@ -106,7 +106,7 @@ export default function App() {
   };
 
   // creatures are ALIVE: a continuous display-rate loop, but ONLY while
-  // visible and playing — hidden/minimized cancels it (idle-CPU contract).
+  // visible and playing - hidden/minimized cancels it (idle-CPU contract).
   // Transform-only updates keep each frame to a few hundred float writes.
   let creatureRaf: number | undefined;
   const startCreatureLoop = (): void => {
@@ -128,9 +128,9 @@ export default function App() {
     }
   };
 
-  // ambient + autosave timers exist ONLY while playing AND visible —
+  // ambient + autosave timers exist ONLY while playing AND visible -
   // a hidden window must cost zero timer wakeups (idle-CPU contract).
-  // NOTE: the OS reduced-motion flag is deliberately ignored — it silently
+  // NOTE: the OS reduced-motion flag is deliberately ignored - it silently
   // froze the requested water motion on real machines. If needed later,
   // motion belongs behind an IN-GAME setting, never an invisible OS flag.
   const startTickers = (): void => {
@@ -188,7 +188,7 @@ export default function App() {
     markDirty();
     if (milestones.length > 0) playChime(true);
     else if (arrivals.length > 0) playChime(false);
-    // milestones and first sightings are precious — save immediately
+    // milestones and first sightings are precious - save immediately
     if (milestones.length > 0 || arrivals.length > 0) void persist();
   };
 
@@ -217,7 +217,7 @@ export default function App() {
 
     startTickers();
 
-    // dragging the window sloshes the water — cozy juice
+    // dragging the window sloshes the water - cozy juice
     motionTracker?.dispose();
     motionTracker = createWindowMotionTracker({
       onImpulse: (ax, ay) => {
@@ -244,7 +244,7 @@ export default function App() {
       const chunk = Math.min(remainingMs, 12 * HOUR_MS);
       const result = advanceSim(simState, chunk, newTank.env);
       simState = result.state;
-      recordEvents(result.events); // journal only — no toast flood
+      recordEvents(result.events); // journal only - no toast flood
       remainingMs -= chunk;
     }
     beginPlaying(newTank, simState);
@@ -254,7 +254,7 @@ export default function App() {
   const continueGame = (save: SaveData): void => {
     const newTank = generateTank(save.seed, save.landPercent);
     let simState = restoreSim(save);
-    // a patch may have changed the world recipe or growth balance —
+    // a patch may have changed the world recipe or growth balance -
     // never block loading, but be honest about it
     if (save.genVersion !== newTank.genVersion) {
       pushToast(
@@ -278,7 +278,7 @@ export default function App() {
     );
 
     // offline catch-up: the world kept living while the app was closed
-    // (growth is clamped to a gentle day — report what actually happened)
+    // (growth is clamped to a gentle day - report what actually happened)
     const awayMs = Date.now() - save.savedAtUnixMs;
     if (awayMs > 30_000) {
       const result = advanceSim(simState, awayMs, newTank.env);
@@ -327,7 +327,7 @@ export default function App() {
       if (save) {
         pushToast(
           "Save restored",
-          "The main save was unreadable — recovered from backup.",
+          "The main save was unreadable - recovered from backup.",
         );
       }
     }

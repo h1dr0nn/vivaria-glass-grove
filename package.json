@@ -1,7 +1,7 @@
 {
   "name": "vivaria-glass-grove",
   "version": "0.1.0",
-  "description": "Cozy desktop terrarium — watch a tiny world grow from nothing",
+  "description": "Cozy desktop terrarium - watch a tiny world grow from nothing",
   "type": "module",
   "scripts": {
     "start": "vite",

@@ -22,7 +22,7 @@ const MATERIAL_FILL: Partial<Record<number, number>> = {
 
 const TEXTURE_STREAM = 20;
 
-/** Blend two hex colors — wet shading fades smoothly along the bank. */
+/** Blend two hex colors - wet shading fades smoothly along the bank. */
 function mixColor(a: number, b: number, t: number): number {
   const mix = (x: number, y: number): number => Math.round(x + (y - x) * t);
   return (
@@ -43,7 +43,7 @@ function fillFor(material: number, wetness: number): number {
   return MATERIAL_FILL[material] ?? SCENE.soil;
 }
 
-/** Multiply a hex color's brightness — cheap hand-painted value variation. */
+/** Multiply a hex color's brightness - cheap hand-painted value variation. */
 function shade(color: number, factor: number): number {
   const r = Math.min(255, Math.round(((color >> 16) & 0xff) * factor));
   const g = Math.min(255, Math.round(((color >> 8) & 0xff) * factor));
@@ -65,7 +65,7 @@ export function buildSubstrate(tank: TankState, layout: TankLayout): Container {
   const textureSeed = splitSeed(tank.seed, TEXTURE_STREAM) ^ 0x1b873593;
   const wetness = columnWetness(tank);
   for (let x = 0; x < tank.width; x++) {
-    // low-frequency value variation — painterly patches, not corduroy
+    // low-frequency value variation - painterly patches, not corduroy
     const jitter = 0.96 + valueNoise1D(textureSeed, x * 0.13) * 0.08;
     drawColumn(g, tank, layout, x, jitter, wetness[x]);
   }
@@ -78,7 +78,7 @@ export function buildSubstrate(tank: TankState, layout: TankLayout): Container {
 }
 
 /**
- * The terrain's TOP FACE — a continuous lit ribbon following the surface
+ * The terrain's TOP FACE - a continuous lit ribbon following the surface
  * profile (steps included), receding by the same depth vector as the water
  * band and glass rim. Without it the 3D water surface met a flat 2D land
  * cutout at the shore and the projection visibly broke.
@@ -129,7 +129,7 @@ function fillTopRibbon(
     const y = screenY(layout, tank.terrainHeight[x]);
     front.push(screenX(layout, x), y, screenX(layout, x + 1), y);
   }
-  // back edge: same profile, receded — clamped inside the glass
+  // back edge: same profile, receded - clamped inside the glass
   const back: number[] = [];
   for (let i = front.length - 2; i >= 0; i -= 2) {
     back.push(Math.min(maxX, front[i] + depthX), front[i + 1] + depthY);
@@ -145,7 +145,7 @@ function fillTopRibbon(
 }
 
 /**
- * Driftwood drawn as shaded logs LYING ALONG the bank — each piece is its
+ * Driftwood drawn as shaded logs LYING ALONG the bank - each piece is its
  * own Graphics rotated to the local terrain slope.
  */
 function buildHardscapeShapes(tank: TankState, layout: TankLayout): Container {
@@ -220,7 +220,7 @@ function buildDriftwood(
     alpha: 0.7,
   });
 
-  // moss settling on the upper side — an old log belongs to the scene
+  // moss settling on the upper side - an old log belongs to the scene
   g.ellipse(-rx * 0.15 * flip, -ry * 0.55, rx * 0.2, ry * 0.28).fill({
     color: SCENE.moss,
     alpha: 0.85,
@@ -298,7 +298,7 @@ function buildPebbles(
   return g;
 }
 
-/** Rock/wood cells are skipped here — drawn as shaded shapes on top. */
+/** Rock/wood cells are skipped here - drawn as shaded shapes on top. */
 function isSolid(material: number): boolean {
   return (
     material !== MATERIAL.air &&

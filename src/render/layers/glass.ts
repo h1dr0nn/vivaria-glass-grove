@@ -3,9 +3,9 @@ import { SCENE } from "../palette";
 import type { TankLayout } from "../layout";
 
 export interface GlassLayers {
-  /** inner back wall — added BEHIND the tank contents */
+  /** inner back wall - added BEHIND the tank contents */
   readonly back: Container;
-  /** front pane, top rim, corner AO — added in front of everything */
+  /** front pane, top rim, corner AO - added in front of everything */
   readonly front: Container;
 }
 
@@ -17,7 +17,7 @@ export interface GlassFrame {
   readonly radius: number;
 }
 
-/** Shared inner-glass geometry — the content mask must match it exactly. */
+/** Shared inner-glass geometry - the content mask must match it exactly. */
 export function glassFrame(layout: TankLayout): GlassFrame {
   return {
     x: layout.originX,
@@ -31,7 +31,7 @@ export function glassFrame(layout: TankLayout): GlassFrame {
 /**
  * The glass box, cabinet-oblique: a faint inner back wall behind the scene,
  * a visible top rim receding up-right, soft inner-corner occlusion, and the
- * crisp front pane on top. Static — built once.
+ * crisp front pane on top. Static - built once.
  */
 export function buildGlass(layout: TankLayout): GlassLayers {
   const { x, y, w, h, radius } = glassFrame(layout);
@@ -46,7 +46,7 @@ export function buildGlass(layout: TankLayout): GlassLayers {
   backWall
     .roundRect(x + depthX, y + depthY, w, h, radius)
     .stroke({ color: SCENE.glassEdge, alpha: 0.4, width: 1.5 });
-  // bottom depth edges joining the front box to the back box — mostly
+  // bottom depth edges joining the front box to the back box - mostly
   // occluded by substrate (correct physically), they complete the volume
   // wherever the floor dips low
   backWall
@@ -60,7 +60,7 @@ export function buildGlass(layout: TankLayout): GlassLayers {
   // --------------------------------------------------------------- front
   const front = new Container();
 
-  // top rim — the open mouth of the tank seen slightly from above
+  // top rim - the open mouth of the tank seen slightly from above
   const rim = new Graphics();
   const rimGradient = new FillGradient({
     type: "linear",
@@ -86,7 +86,7 @@ export function buildGlass(layout: TankLayout): GlassLayers {
     .moveTo(x + depthX, y + depthY)
     .lineTo(x + w + depthX, y + depthY)
     .stroke({ color: 0xffffff, alpha: 0.65, width: 1.5 });
-  // the rim's slanted sides ARE the top depth edges — stroking them joins
+  // the rim's slanted sides ARE the top depth edges - stroking them joins
   // each front-top corner to its back-top corner so the two boxes read as
   // ONE see-through volume, not two rectangles stacked (the line must be
   // a step darker than the rim or it vanishes against it)
@@ -107,7 +107,7 @@ export function buildGlass(layout: TankLayout): GlassLayers {
     .fill({ color: 0xe8e2cf, alpha: 0.4 });
   front.addChild(rim);
 
-  // inner-corner ambient occlusion — contents sit IN a box, tinted not black
+  // inner-corner ambient occlusion - contents sit IN a box, tinted not black
   const ao = new Graphics();
   const aoWidth = layout.scale * 2.2;
   const sideGradient = (flip: boolean): FillGradient =>

@@ -58,7 +58,7 @@ export default function Almanac() {
                     classList={{ locked: at() === undefined }}
                   >
                     <div class="almanac-entry-name">
-                      {at() !== undefined ? PHASE_INFO[phase].name : "— ? —"}
+                      {at() !== undefined ? PHASE_INFO[phase].name : "- ? -"}
                     </div>
                     <div class="almanac-entry-detail">
                       {at() !== undefined
@@ -87,7 +87,7 @@ export default function Almanac() {
                     classList={{ locked: at() === undefined }}
                   >
                     <div class="almanac-entry-name">
-                      {at() !== undefined ? species.name : "— ? —"}
+                      {at() !== undefined ? species.name : "- ? -"}
                     </div>
                     <div class="almanac-entry-detail">
                       {at() !== undefined

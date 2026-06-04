@@ -29,7 +29,7 @@ await page.goto("http://localhost:1420/");
 await page.waitForSelector(".menu-panel", { timeout: 10_000 });
 const continueCard = page.locator(".continue-card");
 if ((await continueCard.count()) === 0) {
-  await fail("no Continue card after reload — save not found");
+  await fail("no Continue card after reload - save not found");
 }
 const cardText = await continueCard.textContent();
 if (!cardText?.includes("40% land")) {
@@ -55,5 +55,5 @@ await page.screenshot({ path: "tmp/e2e-continued.png" });
 
 await browser.close();
 console.log(
-  `E2E PASS — continue card: "${cardText}" | restored: "${restoredHud}" | journal: "${progress}"`,
+  `E2E PASS - continue card: "${cardText}" | restored: "${restoredHud}" | journal: "${progress}"`,
 );

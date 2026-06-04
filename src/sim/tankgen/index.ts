@@ -51,7 +51,7 @@ export function generateTank(
     usableHeight,
     normalizedSeed,
   );
-  // hardscape is cosmetic — drawn rotated along the slope by the renderer,
+  // hardscape is cosmetic - drawn rotated along the slope by the renderer,
   // never stamped into the grid (an unrotated stamp punches holes in hills)
   const hardscape = placeHardscape(
     terrainHeight,

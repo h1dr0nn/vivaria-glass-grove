@@ -34,7 +34,7 @@ body {
   display: block;
 }
 
-/* Cozy scrollbars — thin, rounded, warm-tinted, fading into the panel */
+/* Cozy scrollbars - thin, rounded, warm-tinted, fading into the panel */
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;

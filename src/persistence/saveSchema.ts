@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Save file schema. Treat the file as untrusted input — everything is
+ * Save file schema. Treat the file as untrusted input - everything is
  * validated at the boundary (docs/ARCHITECTURE.md → Persistence).
  */
 

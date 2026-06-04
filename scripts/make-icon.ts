@@ -115,7 +115,7 @@ function circle(cx: number, cy: number, r: number, color: Color): void {
   }
 }
 
-// the sprout on the bank — the icon's heart
+// the sprout on the bank - the icon's heart
 const sproutU = 0.72;
 const sproutX = JX0 + sproutU * (JX1 - JX0);
 const groundY = JY1 - terrainAt(sproutU) * (JY1 - JY0);

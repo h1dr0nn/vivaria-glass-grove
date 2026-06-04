@@ -1,7 +1,7 @@
 import { mix32 } from "../rng";
 
 /**
- * 1D value noise + fBm for terrain synthesis. Pure functions of (seed, x) —
+ * 1D value noise + fBm for terrain synthesis. Pure functions of (seed, x) -
  * no sequential state, so passes stay reorderable and reproducible.
  */
 

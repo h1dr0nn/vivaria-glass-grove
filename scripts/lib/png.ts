@@ -1,6 +1,6 @@
 import { deflateSync } from "node:zlib";
 
-/** Minimal PNG encoder (no deps) — RGB and RGBA variants. */
+/** Minimal PNG encoder (no deps) - RGB and RGBA variants. */
 
 function crc32(buf: Uint8Array): number {
   let crc = ~0;

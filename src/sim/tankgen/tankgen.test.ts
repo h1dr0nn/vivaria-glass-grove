@@ -28,7 +28,7 @@ describe("noise", () => {
   });
 });
 
-describe("generateTank — determinism", () => {
+describe("generateTank - determinism", () => {
   test("same (seed, landPercent) produces byte-identical tanks", () => {
     const a = generateTank(12345, 30);
     const b = generateTank(12345, 30);
@@ -53,11 +53,11 @@ describe("generateTank — determinism", () => {
   });
 });
 
-describe("generateTank — the slider's promise", () => {
+describe("generateTank - the slider's promise", () => {
   test.each([10, 25, 50, 75, 90])(
     "emergent land columns ≈ land%% at land=%i (the visual promise)",
     (landPercent) => {
-      // check across several seeds — the promise must hold for every world
+      // check across several seeds - the promise must hold for every world
       for (const seed of [777, 31, 42, 12345]) {
         const tank = generateTank(seed, landPercent);
         const fraction =
@@ -103,7 +103,7 @@ describe("generateTank — the slider's promise", () => {
   });
 });
 
-describe("generateTank — grid consistency", () => {
+describe("generateTank - grid consistency", () => {
   test.each([0, 30, 60, 100])("land=%i: materials are physical", (land) => {
     const tank = generateTank(99, land);
     const { width, height, usableHeight, materials, terrainHeight, waterlineY } =
@@ -175,7 +175,7 @@ describe("generateTank — grid consistency", () => {
   });
 });
 
-describe("generateTank — fields & environment", () => {
+describe("generateTank - fields & environment", () => {
   test("light and moisture stay in [0,1]", () => {
     const tank = generateTank(5, 45);
     for (let i = 0; i < tank.light.length; i++) {
@@ -238,7 +238,7 @@ describe("generateTank — fields & environment", () => {
   });
 });
 
-describe("generateTank — performance", () => {
+describe("generateTank - performance", () => {
   test("generates in well under 50ms", () => {
     const start = performance.now();
     generateTank(1, 50);

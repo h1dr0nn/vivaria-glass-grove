@@ -1,6 +1,6 @@
 /**
  * Deterministic PRNG utilities. ALL randomness in the sim and procgen must
- * come from here — never Math.random().
+ * come from here - never Math.random().
  *
  * Two kinds:
  * - mulberry32: sequential stream for one-shot generation (tankgen passes).
@@ -35,7 +35,7 @@ export function splitSeed(seed: number, streamId: number): number {
 
 /**
  * Counter-based random in [0, 1): pure function of (seed, tick, stream).
- * Keyed by the absolute tick index — no hidden sequential state.
+ * Keyed by the absolute tick index - no hidden sequential state.
  * Ticks can exceed 2^32; fold high bits in so long games stay well-mixed.
  */
 export function tickRandom(seed: number, tick: number, stream: number): number {

@@ -1,19 +1,19 @@
 /**
- * Water slosh — a 2-mode damped spring (reduced-order slosh model).
+ * Water slosh - a 2-mode damped spring (reduced-order slosh model).
  * Driven by window-move acceleration; purely cosmetic (never touches sim).
  *
  * Mode equation: s'' = -ω²·s - 2ζω·s', semi-implicit Euler. Underdamped
  * (ζ≈0.18) so the surface swings once or twice and settles in ~1.6s.
  */
 
-const OMEGA_X = 7; // rad/s — ~0.9s period horizontal mode
+const OMEGA_X = 7; // rad/s - ~0.9s period horizontal mode
 const ZETA_X = 0.22;
 const OMEGA_Y = 9; // vertical "plop" mode settles faster
 const ZETA_Y = 0.32;
 const K_IMPULSE = 0.0008; // window accel (px/s²) → mode velocity
 const S_MAX = 1;
 const V_MAX = 8;
-/** below this energy the deflection is sub-pixel — snap to sleep */
+/** below this energy the deflection is sub-pixel - snap to sleep */
 const ENERGY_EPSILON = 8e-3;
 
 export interface SloshReading {
@@ -27,7 +27,7 @@ export interface SloshReading {
   readonly bob: number;
 }
 
-const TILT_GAIN = 0.035; // ≈2° at full deflection — juicy, never violent
+const TILT_GAIN = 0.035; // ≈2° at full deflection - juicy, never violent
 
 export interface Slosh {
   /** kick the modes with window acceleration (CSS px/s²) */

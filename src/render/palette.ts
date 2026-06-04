@@ -1,9 +1,9 @@
 /**
- * Scene palette — warm Ghibli-soft. Shadows are tinted (umber/olive),
+ * Scene palette - warm Ghibli-soft. Shadows are tinted (umber/olive),
  * never neutral black. Accents stay close on the wheel.
  */
 export const SCENE = {
-  // the room behind the glass — warm paper light, dimmer at the bottom
+  // the room behind the glass - warm paper light, dimmer at the bottom
   roomTop: 0xf4ecd9,
   roomMid: 0xeadfc4,
   roomBottom: 0xd9c9a8,
@@ -39,7 +39,7 @@ export const SCENE = {
   moss: 0x5f8a4a,
 } as const;
 
-/** Warm grade applied at the root — gentle amber lift, no blowout. */
+/** Warm grade applied at the root - gentle amber lift, no blowout. */
 export const WARM_GRADE = {
   tint: 0xfff2dd,
   saturation: 1.06,

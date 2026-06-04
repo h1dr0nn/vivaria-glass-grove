@@ -6,7 +6,7 @@ import { Application, Container } from "pixi.js";
  * ARCHITECTURE CONTRACT (docs/ARCHITECTURE.md):
  * - No free-running rAF loop. A frame is rendered ONLY when something marked
  *   the scene dirty. A still-but-visible tank must render <5 fps; idle = 0.
- * - WebGL pinned (WebView2 stability) — never auto-detect to WebGPU.
+ * - WebGL pinned (WebView2 stability) - never auto-detect to WebGPU.
  * - This module owns the Application lifecycle and is HMR-safe: the GL
  *   context is disposed before module replacement (no context leak).
  */
@@ -17,21 +17,21 @@ let pendingFrame: number | null = null;
 /** Root container the scene graph hangs off (survives scene swaps). */
 export function getStage(): Container {
   if (!app) {
-    throw new Error("Pixi app not initialized — call createPixiApp first");
+    throw new Error("Pixi app not initialized - call createPixiApp first");
   }
   return app.stage;
 }
 
 export function getApp(): Application {
   if (!app) {
-    throw new Error("Pixi app not initialized — call createPixiApp first");
+    throw new Error("Pixi app not initialized - call createPixiApp first");
   }
   return app;
 }
 
 /**
  * Request a render on the next animation frame. Coalesces multiple calls.
- * This is the ONLY way a frame gets drawn — there is no automatic ticker.
+ * This is the ONLY way a frame gets drawn - there is no automatic ticker.
  */
 export function markDirty(): void {
   if (!app || pendingFrame !== null) return;

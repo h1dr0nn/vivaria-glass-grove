@@ -4,7 +4,7 @@ import type { TankState } from "../sim/tankgen";
 import type { SaveData } from "../persistence/saveSchema";
 import { DEFAULT_TUNABLES } from "../sim/tunables";
 
-/** Central UI state — Solid signals, near-zero idle work. */
+/** Central UI state - Solid signals, near-zero idle work. */
 
 export type Screen = "menu" | "playing";
 
@@ -26,7 +26,7 @@ export const PHASE_INFO: Record<
   sterile: { name: "Sterile", detail: "A quiet glass world, waiting." },
   microbes: {
     name: "Microbial bloom",
-    detail: "Invisible life stirs — the water shimmers faintly.",
+    detail: "Invisible life stirs - the water shimmers faintly.",
   },
   algae: {
     name: "Algae & biofilm",
@@ -142,7 +142,7 @@ export function announceDiscoveries(items: readonly Announcement[]): void {
   }
   pushToast(
     `${items.length} new things appeared`,
-    "Your world has been busy — open the journal to meet them.",
+    "Your world has been busy - open the journal to meet them.",
   );
 }
 
@@ -154,7 +154,7 @@ export function resetGameState(): void {
   setAlmanacOpen(false);
 }
 
-/** What the world is reaching toward — makes the next clock legible. */
+/** What the world is reaching toward - makes the next clock legible. */
 export function nextMilestone(
   state: SimState,
 ): { label: string; progress: number } | null {
@@ -185,7 +185,7 @@ export function nextMilestone(
   }
 }
 
-/** "Day 3 · 04:12:36" from sim time — a clock the player can watch run. */
+/** "Day 3 · 04:12:36" from sim time - a clock the player can watch run. */
 export function formatSimAge(simTimeMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(simTimeMs / 1000));
   const seconds = totalSeconds % 60;
@@ -197,7 +197,7 @@ export function formatSimAge(simTimeMs: number): string {
   return days <= 0 ? clock : `Day ${days + 1} · ${clock}`;
 }
 
-/** Time controls — session-level, wired to the game loop by App. */
+/** Time controls - session-level, wired to the game loop by App. */
 export const SPEED_STEPS = [1, 2, 3, 5, 10] as const;
 
 const [timePaused, setTimePaused] = createSignal(false);

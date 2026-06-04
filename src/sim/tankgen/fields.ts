@@ -2,12 +2,12 @@ import type { EnvSummary } from "../types";
 import { MATERIAL, ZONE, cellIndex } from "./types";
 
 /**
- * STEP 5 — static environment fields. These are closed-form lookups computed
+ * STEP 5 - static environment fields. These are closed-form lookups computed
  * once at generation. There is NO live diffusion solver (docs/ARCHITECTURE.md):
  * the sim reads aggregates of these as constants.
  */
 
-// Gentle per-cell dimming — a glass tank's water column is shallow, so deep
+// Gentle per-cell dimming - a glass tank's water column is shallow, so deep
 // zones dim noticeably but never go pitch dark.
 const WATER_ATTENUATION = 0.985;
 const SOLID_SURFACE_LIGHT_DECAY = 0.02;
@@ -178,7 +178,7 @@ export function summarizeEnv(
   return {
     light: habitableCount > 0 ? habitableLight / habitableCount : 0,
     moisture: habitableCount > 0 ? habitableMoisture / habitableCount : 0,
-    // How aquatic this world is — fraction of columns under water. Mirrors
+    // How aquatic this world is - fraction of columns under water. Mirrors
     // the slider's visual promise and stays monotonic across it.
     waterFraction: width > 0 ? waterColumns / width : 0,
   };

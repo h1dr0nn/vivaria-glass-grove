@@ -5,7 +5,7 @@ import type { EnvSummary } from "../types";
  * y = row 0..height-1 measured from the BOTTOM of the tank upward.
  */
 
-export const GEN_VERSION = 9; // v9: uniform drainage band (no shore notch)
+export const GEN_VERSION = 10; // v10: per-world slope personality (gentle beaches exist)
 
 export const MATERIAL = {
   air: 0,
@@ -52,7 +52,7 @@ export interface HardscapePiece {
 export interface TankState {
   readonly genVersion: number;
   readonly seed: number;
-  /** 0..100 — the player's slider */
+  /** 0..100 - the player's slider */
   readonly landPercent: number;
   readonly archetype: Archetype;
   readonly width: number;

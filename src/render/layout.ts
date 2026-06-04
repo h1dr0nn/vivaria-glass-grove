@@ -19,7 +19,7 @@ const HORIZONTAL_FILL = 0.78;
 const VERTICAL_FILL = 0.74;
 /** how deep the visible top faces read, in cells */
 const DEPTH_CELLS = 3;
-/** recede angle — mostly vertical so the rim reads as seen slightly from above */
+/** recede angle - mostly vertical so the rim reads as seen slightly from above */
 const DEPTH_ANGLE_RAD = (62 * Math.PI) / 180;
 
 export function computeLayout(

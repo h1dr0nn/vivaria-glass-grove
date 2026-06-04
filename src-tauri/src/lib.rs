@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-/// Serializes save writes — concurrent autosave + event-save would otherwise
+/// Serializes save writes - concurrent autosave + event-save would otherwise
 /// race on the shared temp file and could corrupt the save or backup.
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -35,7 +35,7 @@ fn save_game(app: tauri::AppHandle, data: String) -> Result<(), String> {
         "cannot write save".to_string()
     })?;
     if path.exists() {
-        // best-effort backup rotation — a failed backup must not block saving
+        // best-effort backup rotation - a failed backup must not block saving
         let _ = fs::copy(&path, &bak);
     }
     fs::rename(&tmp, &path).map_err(|e| {
@@ -59,7 +59,7 @@ fn load_game(app: tauri::AppHandle) -> Result<Option<String>, String> {
     }
 }
 
-/// Load the rolling backup — used when the primary save fails validation.
+/// Load the rolling backup - used when the primary save fails validation.
 #[tauri::command]
 fn load_backup(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let path = save_path(&app)?.with_extension("json.bak");
@@ -76,7 +76,7 @@ fn load_backup(app: tauri::AppHandle) -> Result<Option<String>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // a second launch would race the save file — focus the first instead
+        // a second launch would race the save file - focus the first instead
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();

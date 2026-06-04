@@ -1,4 +1,4 @@
-# Architecture — Vivaria - Glass Grove
+# Architecture - Vivaria - Glass Grove
 
 > Decisions locked 2026-06-04 after multi-agent research + red-team review.
 > This file is the build contract. Deviations require a written reason here.
@@ -7,7 +7,7 @@
 
 Cozy desktop idle game: pick a **land/water ratio (0–100%)**, the game generates a glass
 tank (side-view cross-section), and a **from-zero ecological succession** unfolds in real
-time — sterile substrate → microbes → algae/moss → plants → small creatures.
+time - sterile substrate → microbes → algae/moss → plants → small creatures.
 Soft warm Ghibli-like palette. Near-zero CPU when idle. Windows-first.
 
 ## Stack (locked)
@@ -16,9 +16,9 @@ Soft warm Ghibli-like palette. Near-zero CPU when idle. Windows-first.
 |---|---|---|
 | Shell | **Tauri v2** (Rust kept thin) | 5–15MB installer, WebView2, code-driven |
 | Build | **Vite 6 + TypeScript 5** | HMR inside Tauri window |
-| Render | **PixiJS v8** — WebGL pinned (`preference:'webgl'`), NOT WebGPU | WebView2 stability; ParticleContainer covers all perf needs |
+| Render | **PixiJS v8** - WebGL pinned (`preference:'webgl'`), NOT WebGPU | WebView2 stability; ParticleContainer covers all perf needs |
 | UI | **Solid.js** DOM overlay on canvas | signal-based, near-zero idle work, real CSS for cozy UI |
-| Sim | **Pure TypeScript** — no Rust/WASM sim (YAGNI) | hot-reloadable, deterministic, unit-testable |
+| Sim | **Pure TypeScript** - no Rust/WASM sim (YAGNI) | hot-reloadable, deterministic, unit-testable |
 | Validation | **zod** at boundaries (save files, seed codes) | |
 | Tests | **vitest** (+coverage), golden-master property tests for sim | |
 
@@ -28,7 +28,7 @@ Rust side does ONLY: window management, atomic save IO, single-instance guard,
 ## Simulation (the most important decisions)
 
 **Approach: stat-curve succession + decorative visual layer.**
-The red-team explicitly REJECTED a live cellular-automata chemistry field — it is the
+The red-team explicitly REJECTED a live cellular-automata chemistry field - it is the
 orb.farm chaos source, breaks deterministic offline catch-up, and is the biggest CPU sink.
 
 1. **ONE pure function advances time**: `integrate(state, fromMs, toMs)`.
@@ -62,16 +62,16 @@ seed + landPercent
   → STEP 3  substrate stack per column: DRAINAGE → SOIL → SAND cap (wet) / LITTER (dry)
   → STEP 4  hardscape: Poisson-disk rocks (0-4) + driftwood (0-2, bridges waterline)
   → STEP 5  static fields: light (top-down attenuation), moisture (closed-form gradient),
-            nutrients (~0 — succession generates them). Coarse grid, bilinear sample.
+            nutrients (~0 - succession generates them). Coarse grid, bilinear sample.
   → TankState { seed, landPercent, archetype, materialGrid, terrainHeight[], waterlineY,
-                hardscape[], fields, zoneMap } — immutable
+                hardscape[], fields, zoneMap } - immutable
 ```
 
 > **Decision change (2026-06-04, during build):** the original research said
 > "binary-search the waterline so submerged VOLUME = (100-land)%". Implemented and
 > rejected: at mid sliders the volume target floods all terrain (no emergent land,
-> no shore). The slider's promise is VISUAL — **~landPercent% of columns are emergent
-> land** — which matches player intuition ("nửa cạn nửa nước" = what you see).
+> no shore). The slider's promise is VISUAL - **~landPercent% of columns are emergent
+> land** - which matches player intuition ("nửa cạn nửa nước" = what you see).
 > Tests assert the column fraction within ±12 across seeds.
 
 ## Rendering rules (idle CPU is a feature)
@@ -80,9 +80,9 @@ seed + landPercent
 - TWO visibility-gated motion sources (amended 2026-06-04 for 60fps creatures):
   (a) an 80ms ambient ticker for water/flora redraws; (b) a creature rAF at
   display refresh, transform-only (zero re-tessellation), ONLY while visible
-  AND playing — creatures are alive, a visible tank is intentionally never
+  AND playing - creatures are alive, a visible tank is intentionally never
   frozen. A visible tank with NO active fauna still renders <5 fps.
-  **HARD guarantee: hidden/minimized = 0 frames, 0 timers, 0 rAF** — every
+  **HARD guarantee: hidden/minimized = 0 frames, 0 timers, 0 rAF** - every
   loop (ambient, creature, slosh-settle) cancels on visibilitychange.
 - Page Visibility API + Tauri focus/minimize events = master switch.
   On resume: single clamped catch-up pass, then re-enable motion.
@@ -92,7 +92,7 @@ seed + landPercent
 - Layer order (back→front): room bg / back glass / water body (cheap UV-wobble shader,
   animates only when visible) / substrate / plants (sine sway) / creatures / bubbles /
   front glass (condensation, inner shadow) / glow container.
-- Land vs water regions are masks from tankgen — same layer stack renders the whole
+- Land vs water regions are masks from tankgen - same layer stack renders the whole
   aquarium↔terrarium spectrum.
 - HMR: `import.meta.hot` dispose/rebuild hook for the Pixi app in the FIRST commit
   (GL context leak otherwise). Render layer is a pure reader of sim state.
@@ -110,7 +110,7 @@ seed + landPercent
 ## Explicitly OUT of v1 (deferred, do not build)
 
 - ❌ Live CA / diffusion chemistry field (post-launch experiment flag at most)
-- ❌ Steam anything (overlay over WebView2 is architecturally IMPOSSIBLE — verified;
+- ❌ Steam anything (overlay over WebView2 is architecturally IMPOSSIBLE - verified;
   achievements/cloud via Rust steamworks crate post-itch.io)
 - ❌ Transparent always-on-bottom companion mode (opt-in, passive-only, post-launch)
 - ❌ Interactive-while-transparent cursor polling (never build)

@@ -47,7 +47,7 @@ export interface SimTunables {
  * next day, first fauna soon after plants take hold.
  */
 export const DEFAULT_TUNABLES: SimTunables = {
-  version: 2, // v2: faster first hours — the first session must visibly live
+  version: 2, // v2: faster first hours - the first session must visibly live
   tickMs: 1000,
   maxCatchupMs: 24 * 60 * 60 * 1000,
   initialMicrobes: 0.001,
@@ -83,7 +83,7 @@ export const DEFAULT_TUNABLES: SimTunables = {
   faunaTrigger: 0.45,
 };
 
-/** FNV-1a over a stable JSON encoding — cheap, stable across sessions. */
+/** FNV-1a over a stable JSON encoding - cheap, stable across sessions. */
 export function hashTunables(tunables: SimTunables): string {
   const json = JSON.stringify(tunables);
   let hash = 0x811c9dc5;

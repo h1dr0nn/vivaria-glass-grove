@@ -43,9 +43,9 @@ interface Anchor {
 
 export interface FloraLayer {
   readonly container: Container;
-  /** redraw growth to match the sim — call on sim updates, not per frame */
+  /** redraw growth to match the sim - call on sim updates, not per frame */
   update(sim: SimState): void;
-  /** ambient sway/drift at a given time — call from the visible-only ticker */
+  /** ambient sway/drift at a given time - call from the visible-only ticker */
   tick(timeMs: number): void;
 }
 
@@ -54,7 +54,7 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
 
   const microbeGfx = new Graphics();
   const algaeGfx = new Graphics();
-  const treeGfx = new Graphics(); // behind small plants — ferns overlap the trunk base
+  const treeGfx = new Graphics(); // behind small plants - ferns overlap the trunk base
   const plantGfx = new Graphics();
   const lilyGfx = new Graphics(); // floats above everything in the flora layer
   container.addChild(microbeGfx, algaeGfx, treeGfx, plantGfx, lilyGfx);
@@ -233,7 +233,7 @@ function drawMicrobes(
     });
   }
 
-  // drifting motes in the water — fade as larger life takes the scene
+  // drifting motes in the water - fade as larger life takes the scene
   const moteFade = Math.max(0.25, 1 - sim.scalars.algae * 0.6);
   const visible = Math.floor(
     specks.length * Math.min(1, strength * 1.6) * moteFade,
@@ -332,7 +332,7 @@ function drawPlants(
   }
 }
 
-/** Arched fronds with leaflets — the forest-floor look. */
+/** Arched fronds with leaflets - the forest-floor look. */
 function drawFern(
   g: Graphics,
   layout: TankLayout,
@@ -375,8 +375,8 @@ function drawFern(
 }
 
 /**
- * A proper moss MOUND — domed, stippled, hugging the ground. (The old flat
- * ellipse read as a lily pad sitting on dirt — user confusion.)
+ * A proper moss MOUND - domed, stippled, hugging the ground. (The old flat
+ * ellipse read as a lily pad sitting on dirt - user confusion.)
  */
 function drawMossCushion(
   g: Graphics,
@@ -389,7 +389,7 @@ function drawMossCushion(
   const width = layout.scale * (1.1 + growth * 2.1);
   const height = width * (0.5 + (anchor.variant % 3) * 0.09);
 
-  // a true MOUND: arched top, FLAT base merging into the ground —
+  // a true MOUND: arched top, FLAT base merging into the ground -
   // a full ellipse painted over the dirt reads as a floating pad
   const SAMPLES = 10;
   const arch: number[] = [baseX - width, baseY];
@@ -417,7 +417,7 @@ function drawMossCushion(
     width * 0.34,
     height * 0.18,
   ).fill({ color: SCENE.leafLight, alpha: 0.5 });
-  // stipple — tiny tufts that say "moss", not "leaf"
+  // stipple - tiny tufts that say "moss", not "leaf"
   for (let d = 0; d < 5; d++) {
     const dx = Math.sin(anchor.variant * 3.7 + d * 2.4) * width * 0.55;
     const t = Math.abs(dx) / width;
@@ -511,7 +511,7 @@ interface TreeAnchor {
   readonly variant: number;
 }
 
-/** 1 (rarely 2) flat, high, dry spots away from the glass — the tree sites. */
+/** 1 (rarely 2) flat, high, dry spots away from the glass - the tree sites. */
 function pickTreeAnchors(tank: TankState, seed: number): TreeAnchor[] {
   if (tank.landPercent < 25) return [];
   const rng = mulberry32(seed);
@@ -568,7 +568,7 @@ function drawTrees(
   }
 }
 
-/** S-curve trunk + branches + cloud-pad canopy — the Ghibli centerpiece. */
+/** S-curve trunk + branches + cloud-pad canopy - the Ghibli centerpiece. */
 function drawTree(
   g: Graphics,
   layout: TankLayout,
@@ -583,7 +583,8 @@ function drawTree(
   const leanSign = v % 2 === 0 ? 1 : -1;
   const lean = leanSign * (0.5 + (v % 5) * 0.12);
   const trunkPx = layout.scale * (6 + growth * 24);
-  const trunkWidth = layout.scale * (0.35 + growth * 0.9);
+  // the trunk THICKENS with growth - a bonsai earns its girth
+  const baseWidth = layout.scale * (0.5 + growth * 1.7);
   const sway = Math.sin(phase * 0.5 + v) * 0.06 * growth;
 
   const midX = baseX + lean * layout.scale * 0.6;
@@ -591,74 +592,111 @@ function drawTree(
   const topX = baseX - lean * layout.scale * 0.35 + sway * trunkPx;
   const topY = baseY - trunkPx;
 
-  // trunk: shadowed stroke + thinner lit overlay
-  g.moveTo(baseX, baseY)
-    .quadraticCurveTo(
-      baseX + lean * layout.scale * 0.5,
-      baseY - trunkPx * 0.28,
-      midX,
-      midY,
-    )
-    .quadraticCurveTo(
-      midX - lean * layout.scale * 0.4,
-      midY - trunkPx * 0.28,
-      topX,
-      topY,
-    )
-    .stroke({ color: SCENE.woodDark, width: Math.max(1.4, trunkWidth), alpha: 0.95 });
-  g.moveTo(baseX - trunkWidth * 0.18, baseY)
-    .quadraticCurveTo(
-      baseX + lean * layout.scale * 0.5 - trunkWidth * 0.18,
-      baseY - trunkPx * 0.28,
-      midX - trunkWidth * 0.18,
-      midY,
-    )
-    .quadraticCurveTo(
-      midX - lean * layout.scale * 0.4 - trunkWidth * 0.18,
-      midY - trunkPx * 0.28,
-      topX - trunkWidth * 0.18,
-      topY,
-    )
-    .stroke({ color: SCENE.wood, width: Math.max(1, trunkWidth * 0.55), alpha: 0.9 });
+  // trunk as a TAPERED POLYGON along the S-curve (wide rooted base → tip),
+  // with a lit edge - a stroked line read as a stick, not a trunk
+  const spine = (t: number): [number, number] => {
+    // composite quadratic: base→mid then mid→top
+    if (t < 0.5) {
+      const u = t * 2;
+      const cx = baseX + lean * layout.scale * 0.5;
+      const cy = baseY - trunkPx * 0.28;
+      return [
+        (1 - u) * (1 - u) * baseX + 2 * (1 - u) * u * cx + u * u * midX,
+        (1 - u) * (1 - u) * baseY + 2 * (1 - u) * u * cy + u * u * midY,
+      ];
+    }
+    const u = (t - 0.5) * 2;
+    const cx = midX - lean * layout.scale * 0.4;
+    const cy = midY - trunkPx * 0.28;
+    return [
+      (1 - u) * (1 - u) * midX + 2 * (1 - u) * u * cx + u * u * topX,
+      (1 - u) * (1 - u) * midY + 2 * (1 - u) * u * cy + u * u * topY,
+    ];
+  };
+  const left: number[] = [];
+  const right: number[] = [];
+  const SEGS = 8;
+  for (let i = 0; i <= SEGS; i++) {
+    const t = i / SEGS;
+    const [sx, sy] = spine(t);
+    const w = baseWidth * (1 - t * 0.72) * 0.5;
+    left.push(sx - w, sy);
+    right.unshift(sx + w, sy);
+  }
+  // root flare
+  left.unshift(baseX - baseWidth * 0.95, baseY);
+  right.push(baseX + baseWidth * 0.95, baseY);
+  g.poly([...left, ...right]).fill(SCENE.woodDark);
+  // lit side
+  const litLeft: number[] = [];
+  const litRight: number[] = [];
+  for (let i = 0; i <= SEGS; i++) {
+    const t = i / SEGS;
+    const [sx, sy] = spine(t);
+    const w = baseWidth * (1 - t * 0.72) * 0.5;
+    litLeft.push(sx - w * 0.7, sy);
+    litRight.unshift(sx - w * 0.05, sy);
+  }
+  g.poly([...litLeft, ...litRight]).fill({ color: SCENE.wood, alpha: 0.85 });
 
-  // branches fan from the upper trunk toward the pad sites
+  // short branches from the upper trunk - tips stay NEAR the crown so the
+  // canopy reads as one mass, never lollipops on sticks
   const branchCount = 1 + Math.floor(growth * 3);
   const tips: { x: number; y: number }[] = [{ x: topX, y: topY }];
   for (let b = 0; b < branchCount; b++) {
-    const t = 0.45 + (b / Math.max(1, branchCount)) * 0.4;
-    const ax = baseX + (topX - baseX) * t;
-    const ay = baseY + (topY - baseY) * t;
+    const t = 0.62 + (b / Math.max(1, branchCount)) * 0.28;
+    const [ax, ay] = spine(t);
     const dir = (b % 2 === 0 ? 1 : -1) * (0.8 + ((v >> b) & 3) * 0.12);
-    const reach = trunkPx * (0.28 + 0.1 * (b % 2)) * (0.7 + growth * 0.5);
+    const reach = trunkPx * 0.18 * (0.8 + growth * 0.4);
     const bx = ax + dir * reach;
-    const by = ay - reach * 0.5;
+    const by = ay - reach * 0.7;
     g.moveTo(ax, ay)
-      .quadraticCurveTo(ax + dir * reach * 0.5, ay - reach * 0.15, bx, by)
+      .quadraticCurveTo(ax + dir * reach * 0.5, ay - reach * 0.2, bx, by)
       .stroke({
         color: SCENE.woodDark,
-        width: Math.max(1, trunkWidth * 0.5 * (1 - t * 0.4)),
+        width: Math.max(1, baseWidth * 0.3 * (1 - t * 0.4)),
         alpha: 0.9,
       });
     tips.push({ x: bx, y: by });
   }
 
-  // canopy: overlapping cloud pads, each 3-tone (shadow / body / highlight)
-  const padCount = 2 + Math.floor(growth * 4) + (v % 2);
-  const padScale = layout.scale * (1.4 + growth * 2.2);
+  // canopy: a COHESIVE cloud - pads cluster tightly around the crown
+  // centroid, drawn shadow→body→highlight so they merge into one mass
+  const crownX = tips.reduce((s, t) => s + t.x, 0) / tips.length;
+  const crownY = tips.reduce((s, t) => s + t.y, 0) / tips.length - trunkPx * 0.06;
+  const padCount = 3 + Math.floor(growth * 4) + (v % 2);
+  const padScale = layout.scale * (1.6 + growth * 2.4);
+  interface Pad {
+    cx: number;
+    cy: number;
+    rx: number;
+    ry: number;
+  }
+  const pads: Pad[] = [];
   for (let i = 0; i < padCount; i++) {
-    const tip = tips[i % tips.length];
-    const jx = Math.sin(v * 12.9898 + i * 7.13) * padScale * 0.6;
-    const jy = Math.cos(v * 4.1414 + i * 5.27) * padScale * 0.35;
-    const cx = tip.x + jx + sway * padScale * 0.4;
-    const cy = tip.y + jy - padScale * 0.2;
-    const rx = padScale * (0.9 + (i % 3) * 0.12);
-    const ry = rx * 0.72;
-    g.ellipse(cx + rx * 0.1, cy + ry * 0.3, rx * 0.92, ry * 0.85).fill({
+    const anchorTip = tips[i % tips.length];
+    // pull each pad toward the crown so the cloud connects
+    const jx = Math.sin(v * 12.9898 + i * 7.13) * padScale * 0.45;
+    const jy = Math.cos(v * 4.1414 + i * 5.27) * padScale * 0.25;
+    const cx = (anchorTip.x + crownX) / 2 + jx + sway * padScale * 0.4;
+    const cy = (anchorTip.y + crownY) / 2 + jy - padScale * 0.15;
+    const rx = padScale * (0.85 + (i % 3) * 0.14);
+    pads.push({ cx, cy, rx, ry: rx * 0.72 });
+  }
+  for (const pad of pads) {
+    g.ellipse(pad.cx + pad.rx * 0.1, pad.cy + pad.ry * 0.3, pad.rx * 0.92, pad.ry * 0.85).fill({
       color: SCENE.algaeDeep,
       alpha: 0.85,
     });
-    g.ellipse(cx, cy, rx, ry).fill({ color: SCENE.leaf, alpha: 0.96 });
-    g.ellipse(cx - rx * 0.16, cy - ry * 0.28, rx * 0.62, ry * 0.55).fill({
+  }
+  for (const pad of pads) {
+    g.ellipse(pad.cx, pad.cy, pad.rx, pad.ry).fill({
+      color: SCENE.leaf,
+      alpha: 0.96,
+    });
+  }
+  for (const pad of pads) {
+    g.ellipse(pad.cx - pad.rx * 0.16, pad.cy - pad.ry * 0.28, pad.rx * 0.62, pad.ry * 0.55).fill({
       color: SCENE.leafLight,
       alpha: 0.9,
     });
@@ -686,7 +724,7 @@ interface LilyAnchor {
   readonly variant: number;
 }
 
-/** floating pads live over DEEP water only — never near the bank */
+/** floating pads live over DEEP water only - never near the bank */
 function pickLilyAnchors(tank: TankState, seed: number): LilyAnchor[] {
   if (tank.waterlineY <= 3) return [];
   const rng = mulberry32(seed);
@@ -706,7 +744,7 @@ function pickLilyAnchors(tank: TankState, seed: number): LilyAnchor[] {
   }));
 }
 
-/** "bèo" — pads riding the live water surface, drifting and bobbing */
+/** "bèo" - pads riding the live water surface, drifting and bobbing */
 function drawLilies(
   g: Graphics,
   tank: TankState,

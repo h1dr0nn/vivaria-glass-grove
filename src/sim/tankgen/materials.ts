@@ -23,7 +23,7 @@ function distanceToWater(
 }
 
 /**
- * STEP 3 — substrate layering per column, bottom-up, mirroring a real
+ * STEP 3 - substrate layering per column, bottom-up, mirroring a real
  * bioactive stack: drainage (false bottom) → soil → cap. Submerged and shore
  * columns get a SAND cap (keeps the water clear); dry land gets LEAF LITTER
  * (the food store that succession will decompose).
@@ -43,12 +43,12 @@ export function buildMaterials(
   for (let x = 0; x < width; x++) {
     const surface = terrain[x];
     const isLand = surface >= waterlineY;
-    // ONE uniform drainage band — a land/water thickness difference put a
+    // ONE uniform drainage band - a land/water thickness difference put a
     // visible 1-cell notch exactly at the shore crossing
     const drainage = 2;
     const capThickness = isLand ? 2 : 1;
     void rng; // reserved for future substrate variation
-    // sand only underwater and on the BEACH hugging the water's edge —
+    // sand only underwater and on the BEACH hugging the water's edge -
     // a pale sand shelf high on the slope reads as a rendering glitch
     const isBeach = beachDist[x] <= 3 && surface <= waterlineY + 3;
     const cap: number =

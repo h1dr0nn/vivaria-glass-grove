@@ -1,5 +1,5 @@
 /**
- * Core simulation types. This module is PURE — no Pixi, no DOM, no Tauri.
+ * Core simulation types. This module is PURE - no Pixi, no DOM, no Tauri.
  */
 
 export type SuccessionPhase =
@@ -21,7 +21,7 @@ export type TierId = "microbes" | "algae" | "plants";
 
 /**
  * Aggregate environment produced by tank generation (static fields summarized).
- * The sim reads these as constants — there is no live chemistry solver.
+ * The sim reads these as constants - there is no live chemistry solver.
  */
 export interface EnvSummary {
   /** 0..1 mean light reaching growable surfaces */
@@ -48,7 +48,7 @@ export interface SimState {
   readonly seed: number;
   /** Total simulated time in integer milliseconds */
   readonly simTimeMs: number;
-  /** Monotonic — never regresses once a phase is reached */
+  /** Monotonic - never regresses once a phase is reached */
   readonly phase: SuccessionPhase;
   readonly scalars: SimScalars;
   readonly pools: SimPools;

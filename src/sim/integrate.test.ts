@@ -48,7 +48,7 @@ describe("createInitialSimState", () => {
   });
 });
 
-describe("advanceSim — time handling", () => {
+describe("advanceSim - time handling", () => {
   test("zero elapsed returns the same state and no events", () => {
     const state = createInitialSimState(42);
     const result = advanceSim(state, 0, ENV_RIVERBANK);
@@ -84,7 +84,7 @@ describe("advanceSim — time handling", () => {
   });
 });
 
-describe("advanceSim — determinism (load-bearing)", () => {
+describe("advanceSim - determinism (load-bearing)", () => {
   test("same state + same elapsed = identical result", () => {
     const state = createInitialSimState(42);
     const a = advanceSim(state, 6 * HOUR_MS, ENV_RIVERBANK, FAST);
@@ -129,7 +129,7 @@ describe("advanceSim — determinism (load-bearing)", () => {
   });
 });
 
-describe("advanceSim — succession arc", () => {
+describe("advanceSim - succession arc", () => {
   test("phases advance in order with one event each", () => {
     let state = createInitialSimState(42);
     const allEvents = [];

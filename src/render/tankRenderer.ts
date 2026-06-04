@@ -32,13 +32,13 @@ function nightStrength(simTimeMs: number): number {
 }
 
 export interface TankView {
-  /** redraw growth + population visuals — call on sim updates */
+  /** redraw growth + population visuals - call on sim updates */
   update(sim: SimState, population: readonly PopulationEntry[]): void;
-  /** water/flora ambience — call from the visible-gated 80ms ticker */
+  /** water/flora ambience - call from the visible-gated 80ms ticker */
   tickAmbient(timeMs: number): void;
-  /** creature transforms — call from the visible-gated 60fps rAF loop */
+  /** creature transforms - call from the visible-gated 60fps rAF loop */
   tickCreatures(timeMs: number): void;
-  /** window drag kicked the tank — purely cosmetic */
+  /** window drag kicked the tank - purely cosmetic */
   applyWindowImpulse(ax: number, ay: number): void;
   /** true while the water is still ringing from an impulse */
   isSloshing(): boolean;
@@ -48,7 +48,7 @@ export interface TankView {
 /**
  * Assembles the layered side-view tank (docs/ARCHITECTURE.md layer order)
  * and applies the single warm-grade ColorMatrixFilter at the root.
- * The view is a pure READER of sim state — it never mutates it.
+ * The view is a pure READER of sim state - it never mutates it.
  */
 export function buildTankView(
   stage: Container,
@@ -64,7 +64,7 @@ export function buildTankView(
   const creatures = buildCreatures(tank, layout);
   const glass = buildGlass(layout);
 
-  // everything INSIDE the tank clips to the rounded glass interior —
+  // everything INSIDE the tank clips to the rounded glass interior -
   // square substrate cells must never poke past the rounded corners
   const frame = glassFrame(layout);
   const contents = new Container();
@@ -95,7 +95,7 @@ export function buildTankView(
   );
 
   const grade = new ColorMatrixFilter();
-  // gentle amber lift: warm highlights, slightly tucked blues — no blowout
+  // gentle amber lift: warm highlights, slightly tucked blues - no blowout
   grade.matrix = [
     1.05, 0, 0, 0, 0.012,
     0, 1.0, 0, 0, 0.006,

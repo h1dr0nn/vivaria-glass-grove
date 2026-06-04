@@ -2,11 +2,11 @@
 import type { TankState } from "./tankgen";
 
 /**
- * Species roster — pure data + a pure population function.
+ * Species roster - pure data + a pure population function.
  * Every species carries a [minLand, maxLand] viability window (DESIGN-BIBLE):
  * mixed-tank exclusives only exist between the extremes, so the paludarium
  * middle is the richest world. Population derives deterministically from
- * (tank, sim) — no hidden creature state in the save.
+ * (tank, sim) - no hidden creature state in the save.
  */
 
 export type Habitat = "water" | "floor" | "shore" | "land" | "air";
@@ -137,7 +137,7 @@ export const SPECIES: readonly SpeciesDef[] = [
   {
     id: "springtail",
     name: "Springtails",
-    blurb: "The first cleanup crew — popping through the litter.",
+    blurb: "The first cleanup crew - popping through the litter.",
     tier: "microbes",
     threshold: 0.6,
     minLand: 10,
@@ -262,7 +262,7 @@ export interface PopulationEntry {
   readonly count: number;
 }
 
-/** Deterministic population from (tank, sim) — the render layer only reads. */
+/** Deterministic population from (tank, sim) - the render layer only reads. */
 export function populationFor(
   tank: TankState,
   sim: SimState,

@@ -1,13 +1,13 @@
 /**
- * Procedural audio — no asset files. A soft generative soundscape:
+ * Procedural audio - no asset files. A soft generative soundscape:
  * low filtered noise for water, airy noise for leaves, occasional droplets,
  * and warm chimes for discoveries. Suspends fully while hidden (0% CPU).
  */
 
 interface AmbientProfile {
-  /** 0..1 — how watery the world is */
+  /** 0..1 - how watery the world is */
   readonly waterAmount: number;
-  /** 0..1 — how leafy the world is */
+  /** 0..1 - how leafy the world is */
   readonly landAmount: number;
 }
 
@@ -29,13 +29,13 @@ function ensureContext(): AudioContext | null {
     master.connect(ctx.destination);
     return ctx;
   } catch {
-    return null; // audio is a garnish — never break the game over it
+    return null; // audio is a garnish - never break the game over it
   }
 }
 
 let cachedNoise: AudioBuffer | null = null;
 
-/** white noise buffer — generated once, shared by all ambient layers */
+/** white noise buffer - generated once, shared by all ambient layers */
 function noiseBuffer(context: AudioContext, seconds: number): AudioBuffer {
   if (cachedNoise && cachedNoise.sampleRate === context.sampleRate) {
     return cachedNoise;
@@ -173,7 +173,7 @@ export function stopAmbient(): void {
   stopAmbientNodes();
 }
 
-/** Warm two-partial chime — discoveries and milestones. */
+/** Warm two-partial chime - discoveries and milestones. */
 export function playChime(big = false): void {
   if (muted) return;
   const context = ensureContext();
@@ -201,7 +201,7 @@ export function setMuted(value: boolean): void {
   try {
     window.localStorage.setItem(MUTE_KEY, value ? "1" : "0");
   } catch {
-    // private mode — fine
+    // private mode - fine
   }
   if (master) {
     master.gain.value = value ? 0 : MASTER_VOLUME;

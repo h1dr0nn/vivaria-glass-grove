@@ -25,7 +25,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
   const regions = waterRuns(tank);
 
   // The water BODY and its tint are retraced every tick with their top edge
-  // following the LIVE surface curve — a static flat top would peek out (or
+  // following the LIVE surface curve - a static flat top would peek out (or
   // leave a gap) whenever a strong slosh tilts the surface past it.
   const body = new Graphics();
   behind.addChild(body);
@@ -43,7 +43,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
   const tint = new Graphics();
   overlay.addChild(tint);
 
-  // The whole visible surface — oblique top band, far specular, near line —
+  // The whole visible surface - oblique top band, far specular, near line -
   // is ONE living assembly, redrawn together every ambient tick: it breathes
   // gently at rest and tilts/swells as a unit when the window is dragged.
   const surfaceBand = new Graphics();
@@ -102,7 +102,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
     const amplitude =
       layout.scale * 0.3 + (slosh?.wave ?? 0) * layout.scale * 0.9;
     const phaseShift = slosh ? -slosh.waveDirection * slosh.wave * 2.5 : 0;
-    // at rest the water still breathes — a slow, visible rise and fall
+    // at rest the water still breathes - a slow, visible rise and fall
     const breath = Math.sin(phase * 0.45) * layout.scale * 0.15;
     const bob = (slosh?.bob ?? 0) * layout.scale * 0.45 + breath;
 
@@ -111,7 +111,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       (x / width - 0.5) * tiltSpan +
       bob +
       Math.sin(phase + phaseShift + x * 0.22) * amplitude;
-    // the far edge lags slightly behind — cheap parallax, but it must
+    // the far edge lags slightly behind - cheap parallax, but it must
     // move JUST as visibly as the near edge (sub-pixel sway reads as frozen)
     const backY = (x: number): number =>
       baseY +
@@ -120,7 +120,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       Math.sin(phase + phaseShift + x * 0.22 + 0.9) * amplitude * 0.8 +
       layout.depthY;
 
-    // body + tint first — the surface assembly draws over their top edge
+    // body + tint first - the surface assembly draws over their top edge
     for (const run of regions) {
       traceWithTop(body, run, frontY);
       body.fill(bodyGradient);
@@ -155,7 +155,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       });
     }
 
-    // near waterline — drawn over the tint, across ALL water columns
+    // near waterline - drawn over the tint, across ALL water columns
     let penDown = false;
     for (let x = 0; x <= width; x += 2) {
       const column = Math.min(width - 1, x);
@@ -204,7 +204,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
         y0 + ay * t + ny * d,
       ];
 
-      // 1 — wet lip grounding the seam on the bank side
+      // 1 - wet lip grounding the seam on the bank side
       const lip: number[] = [];
       for (let i = 0; i <= 4; i++) {
         const t = i / 4;
@@ -216,7 +216,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       }
       surfaceLine.poly(lip).fill({ color: SCENE.sandWet, alpha: 0.4 });
 
-      // 2 — translucent ribbons feathering into the water, whitest at shore
+      // 2 - translucent ribbons feathering into the water, whitest at shore
       const RIBBONS = [
         { d: 0.18, half: 0.28, color: 0xf7fbf9, alpha: 0.5 },
         { d: 0.75, half: 0.22, color: 0xe8f4f0, alpha: 0.3 },
@@ -240,7 +240,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
           .fill({ color: r.color, alpha: Math.min(0.65, r.alpha * churn) });
       }
 
-      // 3 — scalloped foam rim: uneven crests, fat near P0, thin toward P1,
+      // 3 - scalloped foam rim: uneven crests, fat near P0, thin toward P1,
       // phase-scrolled so the fringe shimmers like a travelling lap
       const rim: number[] = [];
       const SAMPLES = 12;
@@ -261,7 +261,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       }
       surfaceLine.poly(rim).fill({ color: 0xf2faf6, alpha: 0.55 });
 
-      // 4 — periodic lap waves: born at the seam, drift out, ease-out fade
+      // 4 - periodic lap waves: born at the seam, drift out, ease-out fade
       for (const offset of [0, 0.5]) {
         const u = (phase / 3.7 + offset + boundary * 0.13) % 1;
         const fade = (1 - u) * (1 - u) * 0.4 * Math.min(churn, 1.6);
@@ -281,7 +281,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
         });
       }
 
-      // 5 — meniscus: a tiny bright stitch where the flat line meets the bank
+      // 5 - meniscus: a tiny bright stitch where the flat line meets the bank
       const [mx, my] = at(0.05, 0.02 * s);
       surfaceLine.circle(mx, my, 0.16 * s).fill({ color: 0xffffff, alpha: 0.7 });
     };

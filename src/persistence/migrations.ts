@@ -7,7 +7,7 @@ import { CURRENT_SAVE_VERSION } from "./saveSchema";
 
 type Migration = (data: Record<string, unknown>) => Record<string, unknown>;
 
-/** index 0 migrates v1 → v2, etc. (none yet — v1 is current) */
+/** index 0 migrates v1 → v2, etc. (none yet - v1 is current) */
 const MIGRATIONS: readonly Migration[] = [];
 
 export function migrateSave(

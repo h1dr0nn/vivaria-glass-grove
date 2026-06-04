@@ -41,7 +41,7 @@ export function buildSave(
   };
 }
 
-/** A legitimate save is a few KB — refuse absurd files before parsing. */
+/** A legitimate save is a few KB - refuse absurd files before parsing. */
 const MAX_SAVE_BYTES = 1_000_000;
 
 /** Parse untrusted JSON into a validated save, or null. Never throws. */

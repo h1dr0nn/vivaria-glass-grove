@@ -3,9 +3,9 @@ import { STREAMS } from "./terrain";
 import type { HardscapePiece } from "./types";
 
 /**
- * STEP 4 — hardscape: a few rocks plus driftwood near the waterline,
+ * STEP 4 - hardscape: a few rocks plus driftwood near the waterline,
  * Poisson-disk-spaced (rejection sampling, seeded) so pieces never crowd.
- * Driftwood prefers the shore band — it becomes the moss "wick" later.
+ * Driftwood prefers the shore band - it becomes the moss "wick" later.
  */
 
 const MIN_PIECE_DISTANCE = 18;
@@ -21,7 +21,7 @@ export function placeHardscape(
   const rng = mulberry32(splitSeed(seed, STREAMS.hardscape));
   const pieces: HardscapePiece[] = [];
 
-  // a log on a steep bank reads as a plank/ramp — driftwood only rests on
+  // a log on a steep bank reads as a plank/ramp - driftwood only rests on
   // genuinely FLAT ground (basin floor, beach flat, hilltop)
   const isValid = (piece: HardscapePiece): boolean =>
     piece.y + piece.halfHeight < usableHeight &&
@@ -40,7 +40,7 @@ export function placeHardscape(
   for (let w = 0; w < woodCount; w++) {
     const make = (x: number): HardscapePiece => {
       const halfWidth = 8 + Math.floor(rng() * 7);
-      // the log must rest fully INSIDE the glass — never through a wall
+      // the log must rest fully INSIDE the glass - never through a wall
       const cx = Math.min(width - 2 - halfWidth, Math.max(halfWidth + 2, x));
       return {
         kind: "driftwood" as const,

@@ -1,4 +1,4 @@
-# Design Bible — Vivaria - Glass Grove
+# Design Bible - Vivaria - Glass Grove
 
 > Long-term content roadmap from the research phase (2026-06-04). The vertical slice
 > ships ONE archetype band (~30% land RIVERBANK) with ~6–8 species across 3 stages.
@@ -8,22 +8,22 @@
 
 `landPercent` (0–100) reshapes terrain ruggedness, waterline, which zones EXIST, the
 species pool, succession pacing, and exclusive unlocks. Each species carries a
-`[minLand, maxLand]` viability window + required zones (tag from day one — cheap
+`[minLand, maxLand]` viability window + required zones (tag from day one - cheap
 forward-compat). Active pool = zones present ∩ viability windows.
 
-- **0% — OPEN AQUARIUM**: Walstad-style planted aquascape game. Goal: self-clearing
+- **0% - OPEN AQUARIUM**: Walstad-style planted aquascape game. Goal: self-clearing
   climax tank, breeding shrimp + schooling fish. Complete on its own.
-- **6–30 — RIVERBANK**: slice archetype. Most legible mixed band.
-- **31–69 — PALUDARIUM**: aspirational endgame. All zones, both succession clocks,
+- **6–30 - RIVERBANK**: slice archetype. Most legible mixed band.
+- **31–69 - PALUDARIUM**: aspirational endgame. All zones, both succession clocks,
   ALL cross-boundary exclusives (frogs, mudskippers, mini crabs, mangrove shore shrub).
-- **70–94 — BOG/HILLSIDE**, **95–100 — DRYLAND**: bioactive vivarium game. Condensation
+- **70–94 - BOG/HILLSIDE**, **95–100 - DRYLAND**: bioactive vivarium game. Condensation
   rain is the only water source. Goal: self-sustaining moss forest floor + living wall.
 
 Pacing: water succession pays off fast (algae bloom in hours) but balances slowly;
 land starts quiet (waiting on cleanup crew) with a richer late decomposition web.
 Mixed tanks run BOTH clocks → most frequent "something new happened" moments.
 
-## Zones × succession (the full matrix — ~36 species)
+## Zones × succession (the full matrix - ~36 species)
 
 | Zone | Conditions | Species (examples) | Succession arc |
 |---|---|---|---|
@@ -40,7 +40,7 @@ Mixed tanks run BOTH clocks → most frequent "something new happened" moments.
    (visible!) → grow → "rain" onto highland → moisture + nutrients wash downhill.
    Sim as a few aggregate scalars, never per-cell physics.
 2. **Humidity gradient**: f(distance-to-water, height, canopy, recent rain).
-   Driftwood = "biological wick" — moss bridges water→land along it.
+   Driftwood = "biological wick" - moss bridges water→land along it.
 3. **Creature crossings** (mixed-only, the emotional core): frogs hop shore↔lowland,
    mudskippers flop shallows↔mud, crabs forage tideline, froglets metamorphose in
    shallows then emigrate. The screenshot moments. Physically impossible at 0%/100%.
@@ -81,14 +81,14 @@ Old genVersion → "grown with an older world recipe" legacy render, never break
 Soft warm Ghibli-like: pastel base + few close-on-wheel accents; **tinted warm shadows**
 (never neutral black); subtle bloom; DoF feel via layer blur/desaturation falloff.
 Coziness lives in lighting + ambient motion + sound, not asset detail. All ambient motion
-shader/tween-driven (sway, ripple, drift) — organisms are 2–4 frame loops or reskinnable
+shader/tween-driven (sway, ripple, drift) - organisms are 2–4 frame loops or reskinnable
 rigs. Stage growth as additive sprite layers (reuse + recolor across stages/species).
 UI: diegetic, minimal chrome (wooden-shelf toolbar, soft toasts), oklch warm tokens,
-designed hover/focus states — anti-template.
+designed hover/focus states - anti-template.
 
 ## Market guardrails (from research)
 
 $5.99–7.99 one-time. Never F2P/IAP. Compete on the succession arc + ratio spectrum +
-art identity — NOT on Bugtopia's collection breadth or Tiny Glade's polish. Steam page +
+art identity - NOT on Bugtopia's collection breadth or Tiny Glade's polish. Steam page +
 demo + wishlist gate before deep content investment. Lead marketing with the fantasy:
 "grow a living world from an empty jar" / one killer before-after GIF.

@@ -27,7 +27,7 @@ export function buildPlaceholderScene(
   backdrop.rect(0, 0, width, height).fill(dusk);
   stage.addChild(backdrop);
 
-  // Empty glass tank, centered — the world that will come alive.
+  // Empty glass tank, centered - the world that will come alive.
   const tankWidth = Math.min(width * 0.7, 900);
   const tankHeight = Math.min(height * 0.6, 520);
   const tankX = (width - tankWidth) / 2;

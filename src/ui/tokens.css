@@ -1,20 +1,20 @@
 /*
- * Design tokens — warm Ghibli-soft palette.
+ * Design tokens - warm Ghibli-soft palette.
  * Shadows are TINTED (never neutral black); accents sit close on the wheel.
  */
 :root {
-  /* Surfaces — warm paper & dusk wood */
+  /* Surfaces - warm paper & dusk wood */
   --color-bg: oklch(24% 0.015 75);
   --color-surface: oklch(30% 0.02 80);
   --color-surface-raised: oklch(35% 0.025 85);
   --color-glass: oklch(90% 0.02 95 / 0.06);
 
-  /* Text — warm cream, never pure white */
+  /* Text - warm cream, never pure white */
   --color-text: oklch(92% 0.025 90);
   --color-text-soft: oklch(78% 0.03 85);
   --color-text-faint: oklch(62% 0.03 80);
 
-  /* Nature accents — close on the wheel, semantic */
+  /* Nature accents - close on the wheel, semantic */
   --color-moss: oklch(68% 0.11 135);
   --color-leaf: oklch(74% 0.13 120);
   --color-water: oklch(72% 0.08 215);
@@ -24,7 +24,7 @@
   --color-bloom: oklch(86% 0.09 85);
   --color-blossom: oklch(78% 0.1 25);
 
-  /* Tinted shadows — warm umber, not black */
+  /* Tinted shadows - warm umber, not black */
   --shadow-soft: 0 2px 12px oklch(18% 0.03 60 / 0.45);
   --shadow-raised: 0 6px 24px oklch(16% 0.03 55 / 0.55);
 

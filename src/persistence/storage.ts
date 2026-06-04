@@ -1,6 +1,6 @@
 /**
  * Storage backend: Rust file IO inside Tauri (atomic + .bak), localStorage
- * in the plain-browser dev environment. Both async, both never throw out —
+ * in the plain-browser dev environment. Both async, both never throw out -
  * callers get null on failure and the game degrades gracefully.
  */
 

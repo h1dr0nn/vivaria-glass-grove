@@ -9,7 +9,7 @@ import { screenX, screenY, type TankLayout } from "../layout";
  *
  * PERFORMANCE CONTRACT: each creature is built ONCE as a small Container of
  * sub-part Graphics; the per-frame path touches ONLY transforms (position /
- * rotation / scale flips and joint rotations) — zero re-tessellation — so a
+ * rotation / scale flips and joint rotations) - zero re-tessellation - so a
  * 60fps creature loop costs a few hundred float writes. Counts come from the
  * sim; motion is cosmetic, seeded, and bounded. The layer never mutates sim.
  */
@@ -53,7 +53,7 @@ interface Creature {
 export interface CreatureLayer {
   readonly container: Container;
   update(population: readonly PopulationEntry[]): void;
-  /** transform-only animation frame — called from the creature rAF loop */
+  /** transform-only animation frame - called from the creature rAF loop */
   tick(timeMs: number): void;
 }
 
@@ -139,11 +139,19 @@ function computeRanges(tank: TankState): Ranges {
     tank.terrainHeight.map((h) => h < tank.waterlineY - 1),
   );
   const land = longestRun(tank.terrainHeight.map((h) => h >= tank.waterlineY));
-  const shore = longestRun(
+  // amphibians roam BEYOND the strict tideline - a narrow shore run made
+  // frogs ping-pong in a tiny pen ("bị kẹt"); widen it well into both sides
+  const strictShore = longestRun(
     tank.terrainHeight.map(
       (h) => tank.waterlineY > 0 && Math.abs(h - tank.waterlineY) <= 3,
     ),
   );
+  const shore = strictShore
+    ? {
+        start: Math.max(2, strictShore.start - 10),
+        end: Math.min(tank.width - 2, strictShore.end + 10),
+      }
+    : null;
   return { water, land, shore };
 }
 
@@ -406,7 +414,7 @@ function confineWater(c: Creature, tank: TankState): void {
 
 // ----------------------------------------------------------- animation
 
-/** transform-only per-frame pass — positions, flips, joint rotations */
+/** transform-only per-frame pass - positions, flips, joint rotations */
 function animate(
   c: Creature,
   layout: TankLayout,

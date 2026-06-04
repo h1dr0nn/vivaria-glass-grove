@@ -1,8 +1,9 @@
 [package]
 name = "vivaria-glass-grove"
 version = "0.1.0"
-description = "Vivaria — grow a tiny world from nothing"
+description = "Vivaria - grow a tiny world from nothing"
 authors = ["Vivaria"]
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

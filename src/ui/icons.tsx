@@ -1,5 +1,5 @@
 /**
- * Inline SVG icons — path data from Lucide (lucide.dev), ISC license.
+ * Inline SVG icons - path data from Lucide (lucide.dev), ISC license.
  * Inlined to keep the bundle dependency-free; stroke follows currentColor.
  */
 

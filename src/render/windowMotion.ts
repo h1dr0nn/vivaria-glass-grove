@@ -1,7 +1,7 @@
 /**
  * Window-motion tracker: turns window drags into slosh impulses.
  * Tauri: onMoved events (PHYSICAL px → CSS px via scaleFactor), which arrive
- * bursty during the Win32 modal drag loop — so every event is self-timestamped
+ * bursty during the Win32 modal drag loop - so every event is self-timestamped
  * and velocity is EMA-smoothed. Browser dev: screenX/Y polling fallback.
  */
 
@@ -17,7 +17,7 @@ export interface WindowMotionTracker {
 const SMOOTH_TAU_S = 0.06;
 /** a single-event jump bigger than this is a teleport (snap/maximize) */
 const JUMP_LIMIT_PX = 600;
-/** minimized windows park near -32000 — not a real move */
+/** minimized windows park near -32000 - not a real move */
 const MINIMIZED_COORD = 30000;
 /** stale-gap: events further apart than this don't form a velocity */
 const GAP_RESET_MS = 250;
@@ -42,7 +42,7 @@ export function createWindowMotionTracker(
 
   const feed = (x: number, y: number): void => {
     if (Math.abs(x) > MINIMIZED_COORD || Math.abs(y) > MINIMIZED_COORD) {
-      lastX = Number.NaN; // minimize park — reset tracking
+      lastX = Number.NaN; // minimize park - reset tracking
       vx = 0;
       vy = 0;
       return;
@@ -63,7 +63,7 @@ export function createWindowMotionTracker(
     lastY = y;
     lastT = t;
     if (Math.abs(dx) > JUMP_LIMIT_PX || Math.abs(dy) > JUMP_LIMIT_PX) {
-      // teleport (snap / restore) — a gentle capped plop, not a tsunami
+      // teleport (snap / restore) - a gentle capped plop, not a tsunami
       vx = 0;
       vy = 0;
       options.onImpulse(0, 800);
@@ -87,7 +87,7 @@ export function createWindowMotionTracker(
         let scale = await win.scaleFactor();
         const unScale = await win.onScaleChanged(({ payload }) => {
           scale = payload.scaleFactor;
-          lastX = Number.NaN; // physical coords jump with the scale — discard
+          lastX = Number.NaN; // physical coords jump with the scale - discard
         });
         const unMove = await win.onMoved(({ payload }) => {
           feed(payload.x / scale, payload.y / scale);

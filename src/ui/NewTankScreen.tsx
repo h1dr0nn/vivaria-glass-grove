@@ -10,7 +10,7 @@ interface NewTankScreenProps {
   onStart: (seed: number, land: number) => void;
   savedGame: SaveData | null;
   onContinue: () => void;
-  /** renderer initialized — starting before this would crash */
+  /** renderer initialized - starting before this would crash */
   ready: boolean;
 }
 
@@ -25,7 +25,7 @@ const ARCHETYPE_COPY: Record<string, { name: string; blurb: string }> = {
   },
   paludarium: {
     name: "Paludarium",
-    blurb: "Half pond, half forest floor — the richest of worlds.",
+    blurb: "Half pond, half forest floor - the richest of worlds.",
   },
   hillside: {
     name: "Hillside",
@@ -52,7 +52,7 @@ export default function NewTankScreen(props: NewTankScreenProps) {
   const [land, setLand] = createSignal(35);
   const [seedText, setSeedText] = createSignal("first jar");
   const [confirmingReplace, setConfirmingReplace] = createSignal(false);
-  // with an existing world the creation panel stays tucked away —
+  // with an existing world the creation panel stays tucked away -
   // a stray click must never threaten the player's save
   const [creating, setCreating] = createSignal(false);
 
@@ -148,7 +148,7 @@ export default function NewTankScreen(props: NewTankScreenProps) {
               class="seed-input"
               value={seedText()}
               onInput={(e) => setSeedText(e.currentTarget.value)}
-              placeholder="seed — any words you like"
+              placeholder="seed - any words you like"
               aria-label="World seed"
             />
             <button

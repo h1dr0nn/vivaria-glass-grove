@@ -1,7 +1,7 @@
 import { mulberry32, splitSeed } from "../rng";
 import { fbm1D } from "./noise";
 
-/** Sub-stream ids — keep stable forever (determinism contract). */
+/** Sub-stream ids - keep stable forever (determinism contract). */
 export const STREAMS = {
   terrain: 0,
   water: 1,
@@ -25,12 +25,12 @@ function smoothstep(t: number): number {
 }
 
 /**
- * STEPS 1–2 — terrain + waterline.
+ * STEPS 1–2 - terrain + waterline.
  *
  * The slider's promise is VISUAL: ~landPercent% of columns are emergent land.
  * We pick the waterline first (deeper water for watery tanks), then shape a
  * basin below it and a land plateau above it, splitting columns at the
- * slider's fraction with a soft blend — the blend slope crossing the
+ * slider's fraction with a soft blend - the blend slope crossing the
  * waterline is what creates a natural beach/shore band. A seeded tilt sign
  * decides whether land rises on the left or the right.
  */
@@ -54,11 +54,13 @@ export function generateTerrain(
 
   const landOnRight = rng() < 0.5;
   const edge = 1 - p; // land occupies u > edge
-  // Slope discipline: the climb from basin to plateau must read as a gentle
-  // bank (≲45°), so the blend width scales with the height it has to cover.
+  // Slope PERSONALITY: every world rolls its own bank, from a definite
+  // climb (factor ~1.2) to a long amble-able beach (factor ~4.5) - the old
+  // narrow 1.3–1.8 roll made every world equally steep.
   const heightDelta = Math.max(1, landTop - basinFloor);
-  const slopeColumns = heightDelta * (1.3 + rng() * 0.5);
-  const blend = Math.min(0.45, Math.max(0.12, slopeColumns / width));
+  const slopeFactor = 1.2 + rng() ** 1.4 * 3.3;
+  const slopeColumns = heightDelta * slopeFactor;
+  const blend = Math.min(0.55, Math.max(0.12, slopeColumns / width));
   const amplitude = lerp(0.04, 0.085, p) * usableHeight;
   const frequency = 0.02 + rng() * 0.014;
   const noiseSeed = splitSeed(seed, STREAMS.terrain) ^ 0x5bd1e995;

@@ -10,7 +10,7 @@ import type { EnvSummary, SimEvent, SimState } from "../sim/types";
 
 export interface GameLoopCallbacks {
   onUpdate(sim: SimState, events: readonly SimEvent[]): void;
-  /** fired when the page hides — the right moment to autosave */
+  /** fired when the page hides - the right moment to autosave */
   onHidden?(): void;
 }
 
@@ -26,18 +26,18 @@ export interface GameLoopOptions {
 export interface GameLoop {
   start(initial: SimState): void;
   stop(): void;
-  /** advance by real elapsed time once — exposed for tests */
+  /** advance by real elapsed time once - exposed for tests */
   tickOnce(): void;
   /** jump the world forward by simulated time (dev boost / future sleep) */
   advanceBy(ms: number): void;
   /** freeze time; resuming never applies the paused span */
   setPaused(paused: boolean): void;
-  /** live time multiplier (x1..x10) — never applied to offline catch-up */
+  /** live time multiplier (x1..x10) - never applied to offline catch-up */
   setSpeed(speed: number): void;
   current(): SimState | null;
 }
 
-/** spans longer than this are offline catch-up — speed never multiplies them */
+/** spans longer than this are offline catch-up - speed never multiplies them */
 const LIVE_SPAN_MS = 5000;
 
 const DEFAULT_STEP_MS = 500;
