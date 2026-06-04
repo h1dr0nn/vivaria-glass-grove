@@ -41,8 +41,12 @@ export function buildSave(
   };
 }
 
+/** A legitimate save is a few KB — refuse absurd files before parsing. */
+const MAX_SAVE_BYTES = 1_000_000;
+
 /** Parse untrusted JSON into a validated save, or null. Never throws. */
 export function parseSave(json: string): SaveData | null {
+  if (json.length > MAX_SAVE_BYTES) return null;
   let raw: unknown;
   try {
     raw = JSON.parse(json);

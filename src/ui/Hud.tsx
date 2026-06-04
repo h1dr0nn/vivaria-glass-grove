@@ -1,9 +1,10 @@
-import { Show, createSignal } from "solid-js";
+import { Show, createMemo, createSignal } from "solid-js";
 import { isMuted, setMuted } from "../audio/engine";
 import { IconBook, IconSprout, IconVolume, IconVolumeMuted } from "./icons";
 import {
   PHASE_INFO,
   formatSimAge,
+  nextMilestone,
   setAlmanacOpen,
   almanacOpen,
   sim,
@@ -24,6 +25,10 @@ const ARCHETYPE_LABEL: Record<string, string> = {
 
 export default function Hud(props: HudProps) {
   const [muted, setMutedSignal] = createSignal(isMuted());
+  const upNext = createMemo(() => {
+    const current = sim();
+    return current ? nextMilestone(current) : null;
+  });
 
   const toggleMute = (): void => {
     const next = !muted();
@@ -42,6 +47,17 @@ export default function Hud(props: HudProps) {
           <span class="hud-phase">{PHASE_INFO[sim()!.phase].name}</span>
           <span class="hud-divider" aria-hidden="true" />
           <span class="hud-age">{formatSimAge(sim()!.simTimeMs)}</span>
+          <Show when={upNext()}>
+            {(milestone) => (
+              <>
+                <span class="hud-divider" aria-hidden="true" />
+                <span class="hud-next" title="What the world is reaching toward">
+                  next: {milestone().label}{" "}
+                  {Math.min(99, Math.floor(milestone().progress * 100))}%
+                </span>
+              </>
+            )}
+          </Show>
         </div>
         <div class="hud-actions">
           <button

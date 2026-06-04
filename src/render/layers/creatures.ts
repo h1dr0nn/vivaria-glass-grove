@@ -246,7 +246,8 @@ function move(
       c.action -= dt;
       if (c.action <= 0) {
         c.action = 1.2 + Math.sin(c.phase + time) * 0.8 + 1;
-        c.dir = Math.random() < 0.5 ? -1 : 1;
+        // deterministic flip — seeded phase folded with the burst time
+        c.dir = Math.sin(c.phase * 13.7 + time * 3.1) < 0 ? -1 : 1;
       }
       if (c.action > 1) {
         c.x += c.dir * c.speed * dt * 3.2;

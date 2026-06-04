@@ -1,7 +1,12 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use tauri::Manager;
+
+/// Serializes save writes — concurrent autosave + event-save would otherwise
+/// race on the shared temp file and could corrupt the save or backup.
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Resolve (and create) the app-data directory holding the save files.
 fn save_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -14,19 +19,29 @@ fn save_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Atomic save: write to a temp file, keep one rolling backup, then rename.
-/// A crash mid-write can never corrupt the existing save.
+/// A crash mid-write can never corrupt the existing save. Writes are
+/// serialized; error details stay in the log, not in the frontend string.
 #[tauri::command]
 fn save_game(app: tauri::AppHandle, data: String) -> Result<(), String> {
+    let _guard = SAVE_LOCK
+        .lock()
+        .map_err(|_| "save lock poisoned".to_string())?;
     let path = save_path(&app)?;
     let tmp = path.with_extension("json.tmp");
     let bak = path.with_extension("json.bak");
 
-    fs::write(&tmp, data.as_bytes()).map_err(|e| format!("cannot write save: {e}"))?;
+    fs::write(&tmp, data.as_bytes()).map_err(|e| {
+        eprintln!("save write failed: {e}");
+        "cannot write save".to_string()
+    })?;
     if path.exists() {
         // best-effort backup rotation — a failed backup must not block saving
         let _ = fs::copy(&path, &bak);
     }
-    fs::rename(&tmp, &path).map_err(|e| format!("cannot commit save: {e}"))?;
+    fs::rename(&tmp, &path).map_err(|e| {
+        eprintln!("save commit failed: {e}");
+        "cannot commit save".to_string()
+    })?;
     Ok(())
 }
 
@@ -37,7 +52,10 @@ fn load_game(app: tauri::AppHandle) -> Result<Option<String>, String> {
     match fs::read_to_string(&path) {
         Ok(contents) => Ok(Some(contents)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("cannot read save: {e}")),
+        Err(e) => {
+            eprintln!("save read failed: {e}");
+            Err("cannot read save".to_string())
+        }
     }
 }
 
@@ -48,7 +66,10 @@ fn load_backup(app: tauri::AppHandle) -> Result<Option<String>, String> {
     match fs::read_to_string(&path) {
         Ok(contents) => Ok(Some(contents)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("cannot read backup: {e}")),
+        Err(e) => {
+            eprintln!("backup read failed: {e}");
+            Err("cannot read backup".to_string())
+        }
     }
 }
 

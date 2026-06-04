@@ -307,6 +307,11 @@
   color: var(--color-text-soft);
 }
 
+.hud-next {
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+
 .hud-actions {
   display: flex;
   gap: var(--space-2);

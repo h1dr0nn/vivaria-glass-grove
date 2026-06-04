@@ -33,8 +33,13 @@ function ensureContext(): AudioContext | null {
   }
 }
 
-/** white noise buffer, reused by both ambient layers */
+let cachedNoise: AudioBuffer | null = null;
+
+/** white noise buffer — generated once, shared by all ambient layers */
 function noiseBuffer(context: AudioContext, seconds: number): AudioBuffer {
+  if (cachedNoise && cachedNoise.sampleRate === context.sampleRate) {
+    return cachedNoise;
+  }
   const buffer = context.createBuffer(
     1,
     Math.floor(context.sampleRate * seconds),
@@ -44,6 +49,7 @@ function noiseBuffer(context: AudioContext, seconds: number): AudioBuffer {
   for (let i = 0; i < data.length; i++) {
     data[i] = Math.random() * 2 - 1;
   }
+  cachedNoise = buffer;
   return buffer;
 }
 

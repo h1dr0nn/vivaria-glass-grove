@@ -42,18 +42,19 @@ export interface SimTunables {
 
 /**
  * Default pacing targets (real-time feel, see DESIGN-BIBLE "three clocks"):
- * microbes visible in ~minutes, established < 1h; algae over a few hours;
- * plants over ~a day; first fauna a bit after plants establish.
+ * the first shimmer of life within MINUTES (the first session must hook),
+ * microbes established ~30-40min, algae over a few hours, plants by the
+ * next day, first fauna soon after plants take hold.
  */
 export const DEFAULT_TUNABLES: SimTunables = {
-  version: 1,
+  version: 2, // v2: faster first hours — the first session must visibly live
   tickMs: 1000,
   maxCatchupMs: 24 * 60 * 60 * 1000,
   initialMicrobes: 0.001,
-  nutrientYieldPerHour: 0.35,
+  nutrientYieldPerHour: 0.5,
   nutrientMax: 1,
   microbes: {
-    growthRatePerHour: 9,
+    growthRatePerHour: 15,
     seedFloor: 0.001,
     establishThreshold: 0.05,
     gatePrevTier: 0,
@@ -62,7 +63,7 @@ export const DEFAULT_TUNABLES: SimTunables = {
     jitter: 0.1,
   },
   algae: {
-    growthRatePerHour: 1.6,
+    growthRatePerHour: 2.2,
     seedFloor: 0.002,
     establishThreshold: 0.05,
     gatePrevTier: 0.3,
@@ -71,7 +72,7 @@ export const DEFAULT_TUNABLES: SimTunables = {
     jitter: 0.1,
   },
   plants: {
-    growthRatePerHour: 0.22,
+    growthRatePerHour: 0.3,
     seedFloor: 0.002,
     establishThreshold: 0.05,
     gatePrevTier: 0.35,

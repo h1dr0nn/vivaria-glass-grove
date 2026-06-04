@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import type { SimEvent, SimState, SuccessionPhase } from "../sim/types";
 import type { TankState } from "../sim/tankgen";
 import type { SaveData } from "../persistence/saveSchema";
+import { DEFAULT_TUNABLES } from "../sim/tunables";
 
 /** Central UI state — Solid signals, near-zero idle work. */
 
@@ -82,37 +83,67 @@ export function pushToast(title: string, detail: string): void {
   }, 6000);
 }
 
-/** Record first sightings of species — the "something arrived!" moments. */
+export interface Announcement {
+  readonly title: string;
+  readonly detail: string;
+}
+
+/** Record first sightings of species. Returns the new arrivals (no toasts). */
 export function recordSightings(
   population: ReadonlyArray<{
     readonly def: { readonly id: string; readonly name: string; readonly blurb: string };
   }>,
   simTimeMs: number,
-  announce = true,
-): boolean {
+): Announcement[] {
   const known = speciesDiscovered();
   const fresh = population.filter((entry) => !known.has(entry.def.id));
-  if (fresh.length === 0) return false;
+  if (fresh.length === 0) return [];
   const next = new Map(known);
   for (const entry of fresh) {
     next.set(entry.def.id, simTimeMs);
-    if (announce) pushToast(`${entry.def.name} arrived!`, entry.def.blurb);
   }
   setSpeciesDiscovered(next);
-  return true;
+  return fresh.map((entry) => ({
+    title: `${entry.def.name} arrived!`,
+    detail: entry.def.blurb,
+  }));
 }
 
-/** Fold sim events into discoveries + toasts. */
-export function recordEvents(events: readonly SimEvent[]): void {
+/** Fold sim events into the journal. Returns the new milestones (no toasts). */
+export function recordEvents(events: readonly SimEvent[]): Announcement[] {
+  const fresh: Announcement[] = [];
   for (const event of events) {
     if (event.type !== "phase-advanced") continue;
+    let added = false;
     setDiscoveries((current) => {
       if (current.some((d) => d.phase === event.phase)) return current;
+      added = true;
       return [...current, { phase: event.phase, atSimTimeMs: event.atSimTimeMs }];
     });
-    const info = PHASE_INFO[event.phase];
-    pushToast(info.name, info.detail);
+    if (added) {
+      const info = PHASE_INFO[event.phase];
+      fresh.push({ title: info.name, detail: info.detail });
+    }
   }
+  return fresh;
+}
+
+const TOAST_BATCH_LIMIT = 3;
+
+/**
+ * Announce discoveries gently: a few get their own toasts, a flood becomes
+ * one calm summary (long offline catch-up must not bury the screen).
+ */
+export function announceDiscoveries(items: readonly Announcement[]): void {
+  if (items.length === 0) return;
+  if (items.length <= TOAST_BATCH_LIMIT) {
+    for (const item of items) pushToast(item.title, item.detail);
+    return;
+  }
+  pushToast(
+    `${items.length} new things appeared`,
+    "Your world has been busy — open the journal to meet them.",
+  );
 }
 
 export function resetGameState(): void {
@@ -121,6 +152,37 @@ export function resetGameState(): void {
   setDiscoveries([]);
   setSpeciesDiscovered(new Map());
   setAlmanacOpen(false);
+}
+
+/** What the world is reaching toward — makes the next clock legible. */
+export function nextMilestone(
+  state: SimState,
+): { label: string; progress: number } | null {
+  const t = DEFAULT_TUNABLES;
+  switch (state.phase) {
+    case "sterile":
+      return {
+        label: PHASE_INFO.microbes.name,
+        progress: state.scalars.microbes / t.microbes.establishThreshold,
+      };
+    case "microbes":
+      return {
+        label: PHASE_INFO.algae.name,
+        progress: state.scalars.algae / t.algae.establishThreshold,
+      };
+    case "algae":
+      return {
+        label: PHASE_INFO.plants.name,
+        progress: state.scalars.plants / t.plants.establishThreshold,
+      };
+    case "plants":
+      return {
+        label: PHASE_INFO.fauna.name,
+        progress: state.scalars.plants / t.faunaTrigger,
+      };
+    default:
+      return null;
+  }
 }
 
 /** "Day 3 · 14h" from sim time. */

@@ -10,6 +10,8 @@ interface NewTankScreenProps {
   onStart: (seed: number, land: number) => void;
   savedGame: SaveData | null;
   onContinue: () => void;
+  /** renderer initialized — starting before this would crash */
+  ready: boolean;
 }
 
 const ARCHETYPE_COPY: Record<string, { name: string; blurb: string }> = {
@@ -58,11 +60,18 @@ export default function NewTankScreen(props: NewTankScreenProps) {
     setSeedText(String(Math.floor(Math.random() * 0xffffffff)));
   };
 
+  let confirmTimer: ReturnType<typeof setTimeout> | undefined;
+
   const handleStart = (): void => {
+    if (!props.ready) return;
     if (props.savedGame && !confirmingReplace()) {
       setConfirmingReplace(true);
+      // a mis-click shouldn't leave a destructive button armed
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => setConfirmingReplace(false), 4000);
       return;
     }
+    clearTimeout(confirmTimer);
     props.onStart(seed(), land());
   };
 
@@ -79,6 +88,7 @@ export default function NewTankScreen(props: NewTankScreenProps) {
             <button
               type="button"
               class="continue-card"
+              disabled={!props.ready}
               onClick={() => props.onContinue()}
             >
               <span class="continue-label">Continue your world</span>
@@ -138,6 +148,7 @@ export default function NewTankScreen(props: NewTankScreenProps) {
           type="button"
           class="grow-button"
           classList={{ "grow-button-warning": confirmingReplace() }}
+          disabled={!props.ready}
           onClick={handleStart}
         >
           {confirmingReplace()

@@ -1,4 +1,4 @@
-import { Show, onCleanup, onMount } from "solid-js";
+import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import "./ui/tokens.css";
 import "./ui/app.css";
 import "./ui/panels.css";
@@ -28,6 +28,7 @@ import Hud from "./ui/Hud";
 import Almanac from "./ui/Almanac";
 import Toasts from "./ui/Toasts";
 import {
+  announceDiscoveries,
   discoveries,
   pushToast,
   recordEvents,
@@ -45,6 +46,7 @@ import {
   speciesDiscovered,
   tank,
 } from "./ui/store";
+import { DEFAULT_TUNABLES, hashTunables } from "./sim/tunables";
 
 const HOUR_MS = 3_600_000;
 const AMBIENT_STEP_MS = 80;
@@ -52,6 +54,7 @@ const AUTOSAVE_MS = 60_000;
 
 /** Dev-page parameters (?land=&seed=&simHours=&speed=) for visual testing. */
 function readDevParams() {
+  if (!import.meta.env.DEV) return null; // never in shipped builds
   const query = new URLSearchParams(window.location.search);
   if (!query.has("land") && !query.has("seed")) return null;
   const num = (key: string, fallback: number): number => {
@@ -100,9 +103,44 @@ export default function App() {
     }
   };
 
-  const persist = (): void => {
+  // ambient + autosave timers exist ONLY while playing AND visible —
+  // a hidden window must cost zero timer wakeups (idle-CPU contract)
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  const startTickers = (): void => {
+    clearInterval(ambientInterval);
+    if (!prefersReducedMotion) {
+      ambientInterval = setInterval(() => {
+        if (!view) return;
+        view.tick(performance.now());
+        markDirty();
+      }, AMBIENT_STEP_MS);
+    }
+    clearInterval(autosaveInterval);
+    autosaveInterval = setInterval(() => void persist(), AUTOSAVE_MS);
+  };
+
+  const stopTickers = (): void => {
+    clearInterval(ambientInterval);
+    clearInterval(autosaveInterval);
+    ambientInterval = undefined;
+    autosaveInterval = undefined;
+  };
+
+  const onVisibilityTickers = (): void => {
+    if (document.visibilityState === "hidden") {
+      stopTickers();
+      stopSettleLoop();
+    } else if (view) {
+      startTickers();
+    }
+  };
+
+  const persist = (): Promise<boolean> => {
     const currentSim = loop?.current() ?? sim();
-    if (!activeTank || !currentSim) return;
+    if (!activeTank || !currentSim) return Promise.resolve(false);
     const data = buildSave(
       activeTank,
       currentSim,
@@ -110,7 +148,7 @@ export default function App() {
       Date.now(),
       speciesDiscovered(),
     );
-    void storage.write(JSON.stringify(data));
+    return storage.write(JSON.stringify(data));
   };
 
   const handleSimUpdate = (
@@ -118,15 +156,16 @@ export default function App() {
     events: readonly SimEvent[],
   ): void => {
     setSim(simState);
-    recordEvents(events);
+    const milestones = recordEvents(events);
     const population = activeTank ? populationFor(activeTank, simState) : [];
-    const newSightings = recordSightings(population, simState.simTimeMs);
+    const arrivals = recordSightings(population, simState.simTimeMs);
+    announceDiscoveries([...milestones, ...arrivals]);
     view?.update(simState, population);
     markDirty();
-    if (events.length > 0) playChime(true);
-    else if (newSightings) playChime(false);
+    if (milestones.length > 0) playChime(true);
+    else if (arrivals.length > 0) playChime(false);
     // milestones and first sightings are precious — save immediately
-    if (events.length > 0 || newSightings) persist();
+    if (milestones.length > 0 || arrivals.length > 0) void persist();
   };
 
   const beginPlaying = (newTank: TankState, simState: SimState): void => {
@@ -134,7 +173,7 @@ export default function App() {
     view?.destroy();
     view = buildTankView(app.stage, newTank, app.screen.width, app.screen.height);
     const population = populationFor(newTank, simState);
-    recordSightings(population, simState.simTimeMs, false);
+    recordSightings(population, simState.simTimeMs); // journal only, no toasts
     view.update(simState, population);
     activeTank = newTank;
     setTank(newTank);
@@ -145,19 +184,11 @@ export default function App() {
     loop?.stop();
     loop = createGameLoop(newTank.env, {
       onUpdate: handleSimUpdate,
-      onHidden: persist,
+      onHidden: () => void persist(),
     });
     loop.start(simState);
 
-    clearInterval(ambientInterval);
-    ambientInterval = setInterval(() => {
-      if (document.visibilityState !== "visible" || !view) return;
-      view.tick(performance.now());
-      markDirty();
-    }, AMBIENT_STEP_MS);
-
-    clearInterval(autosaveInterval);
-    autosaveInterval = setInterval(persist, AUTOSAVE_MS);
+    startTickers();
 
     // dragging the window sloshes the water — cozy juice
     motionTracker?.dispose();
@@ -186,16 +217,29 @@ export default function App() {
       const chunk = Math.min(remainingMs, 12 * HOUR_MS);
       const result = advanceSim(simState, chunk, newTank.env);
       simState = result.state;
-      recordEvents(result.events);
+      recordEvents(result.events); // journal only — no toast flood
       remainingMs -= chunk;
     }
     beginPlaying(newTank, simState);
-    persist();
+    void persist();
   };
 
   const continueGame = (save: SaveData): void => {
     const newTank = generateTank(save.seed, save.landPercent);
     let simState = restoreSim(save);
+    // a patch may have changed the world recipe or growth balance —
+    // never block loading, but be honest about it
+    if (save.genVersion !== newTank.genVersion) {
+      pushToast(
+        "World recipe updated",
+        "Terrain may look a little different after the update.",
+      );
+    } else if (save.tunablesHash !== hashTunables(DEFAULT_TUNABLES)) {
+      pushToast(
+        "Growth rebalanced",
+        "Life may grow at a slightly different pace after the update.",
+      );
+    }
     setDiscoveries(
       save.discoveries.map((d) => ({
         phase: d.phase,
@@ -207,25 +251,28 @@ export default function App() {
     );
 
     // offline catch-up: the world kept living while the app was closed
+    // (growth is clamped to a gentle day — report what actually happened)
     const awayMs = Date.now() - save.savedAtUnixMs;
     if (awayMs > 30_000) {
       const result = advanceSim(simState, awayMs, newTank.env);
       simState = result.state;
-      recordEvents(result.events);
-      const awayHours = Math.floor(awayMs / HOUR_MS);
-      if (awayHours >= 1) {
+      const milestones = recordEvents(result.events);
+      announceDiscoveries(milestones);
+      const grownMs = Math.min(awayMs, DEFAULT_TUNABLES.maxCatchupMs);
+      const grownHours = Math.floor(grownMs / HOUR_MS);
+      if (grownHours >= 1) {
         pushToast(
           "Welcome back",
-          `Your world kept growing for ${awayHours}h while you were away.`,
+          `Your world kept growing for ${grownHours}h while you were away.`,
         );
       }
     }
     beginPlaying(newTank, simState);
-    persist();
+    void persist();
   };
 
-  const backToMenu = (): void => {
-    persist();
+  const backToMenu = async (): Promise<void> => {
+    const saved = persist(); // begin the write, then tear down
     stopAmbient();
     loop?.stop();
     loop = undefined;
@@ -238,9 +285,10 @@ export default function App() {
     view = undefined;
     activeTank = null;
     resetGameState();
-    void loadSavedGame(); // refresh the Continue card
     setScreen("menu");
     markDirty();
+    await saved; // the Continue card must reflect THIS world
+    await loadSavedGame();
   };
 
   const loadSavedGame = async (): Promise<void> => {
@@ -259,12 +307,19 @@ export default function App() {
     setSavedGame(save);
   };
 
+  const [pixiReady, setPixiReady] = createSignal(false);
+
   onMount(() => {
     if (!host) return;
     loadMutePreference();
     bindAudioVisibility();
+    document.addEventListener("visibilitychange", onVisibilityTickers);
+    onCleanup(() =>
+      document.removeEventListener("visibilitychange", onVisibilityTickers),
+    );
     void (async () => {
       await createPixiApp(host!);
+      setPixiReady(true);
       await loadSavedGame();
       const dev = readDevParams();
       if (dev) {
@@ -272,7 +327,7 @@ export default function App() {
       }
     })();
 
-    const onBeforeUnload = (): void => persist();
+    const onBeforeUnload = (): void => void persist();
     window.addEventListener("beforeunload", onBeforeUnload);
     onCleanup(() => window.removeEventListener("beforeunload", onBeforeUnload));
 
@@ -315,6 +370,7 @@ export default function App() {
       <div class="ui-overlay" id="ui">
         <Show when={screen() === "menu"}>
           <NewTankScreen
+            ready={pixiReady()}
             onStart={(seed, land) => startNewGame(seed, land)}
             savedGame={savedGame()}
             onContinue={() => {
@@ -324,7 +380,7 @@ export default function App() {
           />
         </Show>
         <Show when={screen() === "playing" && sim() && tank()}>
-          <Hud onNewTank={backToMenu} />
+          <Hud onNewTank={() => void backToMenu()} />
           <Almanac />
         </Show>
         <Toasts />
