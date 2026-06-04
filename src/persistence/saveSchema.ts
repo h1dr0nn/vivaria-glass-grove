@@ -35,6 +35,7 @@ export const saveSchema = z.object({
     pools: z.object({
       nutrients: z.number().min(0),
     }),
+    treeAgeMs: z.number().nonnegative().default(0),
     // the living food web — live mutable state (NOT a pure fn of seed once
     // the sim has run), so it must be persisted verbatim. Optional/loose so
     // v1 saves and future roster changes load without a hard migration.

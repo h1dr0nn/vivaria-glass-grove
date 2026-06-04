@@ -112,12 +112,6 @@ export function buildCreatures(
 
 // ------------------------------------------------------------- habitats
 
-interface Ranges {
-  readonly water: ColumnRange | null;
-  readonly land: ColumnRange | null;
-  readonly shore: ColumnRange | null;
-}
-
 function longestRun(columns: readonly boolean[]): ColumnRange | null {
   let best: ColumnRange | null = null;
   let start = -1;
@@ -134,11 +128,21 @@ function longestRun(columns: readonly boolean[]): ColumnRange | null {
   return best;
 }
 
+interface Ranges {
+  readonly water: ColumnRange | null;
+  readonly land: ColumnRange | null;
+  readonly shore: ColumnRange | null;
+  readonly air: ColumnRange | null;
+}
+
 function computeRanges(tank: TankState): Ranges {
   const water = longestRun(
     tank.terrainHeight.map((h) => h < tank.waterlineY - 1),
   );
   const land = longestRun(tank.terrainHeight.map((h) => h >= tank.waterlineY));
+  // air = the whole open span above the substrate (over water AND land), so
+  // flyers cross the water surface, not just hover over the dirt
+  const air: ColumnRange = { start: 2, end: tank.width - 2 };
   // amphibians roam BEYOND the strict tideline - a narrow shore run made
   // frogs ping-pong in a tiny pen ("bị kẹt"); widen it well into both sides
   const strictShore = longestRun(
@@ -152,7 +156,7 @@ function computeRanges(tank: TankState): Ranges {
         end: Math.min(tank.width - 2, strictShore.end + 10),
       }
     : null;
-  return { water, land, shore };
+  return { water, land, shore, air };
 }
 
 function rangeFor(def: SpeciesDef, ranges: Ranges): ColumnRange | null {
@@ -163,8 +167,9 @@ function rangeFor(def: SpeciesDef, ranges: Ranges): ColumnRange | null {
     case "shore":
       return ranges.shore ?? ranges.land;
     case "land":
-    case "air":
       return ranges.land;
+    case "air":
+      return ranges.air;
     default:
       return null;
   }
@@ -185,7 +190,9 @@ function homeY(def: SpeciesDef, tank: TankState, x: number): number {
     case "land":
       return surface + 0.4;
     case "air":
-      return surface + 4;
+      // hover above the SURFACE — water columns use the waterline, land
+      // columns use the terrain — so flyers drift over the pond too
+      return Math.max(surface, tank.waterlineY) + 4;
     default:
       return surface + 1;
   }
@@ -260,16 +267,33 @@ function move(
       break;
     }
     case "school": {
+      // the school roams the INNER 70% of open water — never piles against
+      // the bank ("hay bơi ra chỗ giao đất rồi đứng đấy")
+      const inset = margin + (range.end - range.start) * 0.15;
+      const span = Math.max(2, range.end - range.start - inset * 2);
       const center =
-        range.start +
-        margin +
-        ((Math.sin(time * 0.07 + c.def.size) + 1) / 2) *
-          (range.end - range.start - margin * 2);
-      const targetX = center + Math.sin(c.phase * 5) * 6;
+        range.start + inset + ((Math.sin(time * 0.07 + c.def.size) + 1) / 2) * span;
+      const targetX = center + Math.sin(c.phase * 5) * Math.min(6, span * 0.2);
       const dx = targetX - c.x;
       if (Math.abs(dx) > 0.3) c.dir = Math.sign(dx);
       c.x += dx * dt * 0.7;
       c.y += Math.sin(time * 0.9 + c.phase * 3) * dt * 1.4;
+      confineWater(c, tank);
+      break;
+    }
+    case "swim": {
+      // a solitary mid-water wanderer — long lazy cruises, turns before the
+      // bank, never schools
+      c.action -= dt;
+      if (c.action <= 0) {
+        c.action = 2.5 + ((c.phase * 521) % 3);
+        c.dir = Math.sin(c.phase * 9.1 + time * 0.7) < 0 ? -1 : 1;
+      }
+      const inset = margin + (range.end - range.start) * 0.12;
+      c.x += c.dir * c.speed * dt * 1.6;
+      if (c.x < range.start + inset || c.x > range.end - inset) c.dir *= -1;
+      c.x = Math.min(range.end - inset, Math.max(range.start + inset, c.x));
+      c.y += Math.sin(time * 0.8 + c.phase * 2) * dt * 1.0;
       confineWater(c, tank);
       break;
     }
@@ -433,7 +457,9 @@ function animate(
   const { parts } = c;
   switch (c.def.id) {
     case "ember-tetra":
-    case "dwarf-cory": {
+    case "dwarf-cory":
+    case "pygmy-rasbora":
+    case "cherry-barb": {
       if (parts.tail) {
         parts.tail.rotation = Math.sin(time * 8 + c.phase) * 0.35;
       }
@@ -548,6 +574,8 @@ function buildBody(
   switch (def.id) {
     case "ember-tetra":
     case "dwarf-cory":
+    case "pygmy-rasbora":
+    case "cherry-barb":
       parts = buildFish(container, s, def.color, def.accent);
       break;
     case "cherry-shrimp":

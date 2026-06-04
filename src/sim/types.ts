@@ -54,6 +54,8 @@ export interface SimState {
   readonly phase: SuccessionPhase;
   readonly scalars: SimScalars;
   readonly pools: SimPools;
+  /** ms the bonsai has been growing (accrues once plants establish) — girth */
+  readonly treeAgeMs: number;
   /** living food web layered on the backbone (undefined only in legacy v1 saves) */
   readonly eco?: EcoState;
 }

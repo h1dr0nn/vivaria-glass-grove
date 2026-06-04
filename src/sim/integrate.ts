@@ -33,8 +33,12 @@ interface Draft {
   plants: number;
   nutrients: number;
   phase: SuccessionPhase;
+  treeAgeMs: number;
   eco: EcoState;
 }
+
+/** the bonsai starts aging once plants are this established */
+const TREE_AGE_GATE = 0.5;
 
 export function createInitialSimState(
   seed: number,
@@ -50,6 +54,7 @@ export function createInitialSimState(
       plants: 0,
     },
     pools: { nutrients: 0 },
+    treeAgeMs: 0,
     eco: createInitialEco(),
   };
 }
@@ -75,6 +80,7 @@ export function advanceSim(
     plants: state.scalars.plants,
     nutrients: state.pools.nutrients,
     phase: state.phase,
+    treeAgeMs: state.treeAgeMs ?? 0,
     eco: state.eco ?? createInitialEco(),
   };
   const events: SimEvent[] = [];
@@ -96,6 +102,7 @@ export function advanceSim(
         plants: draft.plants,
       },
       pools: { nutrients: draft.nutrients },
+      treeAgeMs: draft.treeAgeMs,
       eco: draft.eco,
     },
     events,
@@ -164,6 +171,11 @@ function runTick(
   }
 
   advancePhase(draft, tick, tunables, events);
+
+  // the bonsai trunk fattens once plants establish (girth = f(age))
+  if (draft.plants >= TREE_AGE_GATE) {
+    draft.treeAgeMs += tunables.tickMs;
+  }
 
   // The living food web changes on a DAY timescale, so it steps once per
   // sim-hour (on an absolute-tick boundary, so stepped===batched holds) —

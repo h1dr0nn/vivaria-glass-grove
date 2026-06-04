@@ -31,6 +31,7 @@ export function buildSave(
       phase: sim.phase,
       scalars: { ...sim.scalars },
       pools: { ...sim.pools },
+      treeAgeMs: sim.treeAgeMs,
       eco: sim.eco
         ? { food: { ...sim.eco.food }, pop: { ...sim.eco.pop } }
         : undefined,
@@ -74,6 +75,7 @@ export function restoreSim(save: SaveData): SimState {
     phase: save.sim.phase,
     scalars: { ...save.sim.scalars },
     pools: { ...save.sim.pools },
+    treeAgeMs: save.sim.treeAgeMs,
     eco: save.sim.eco
       ? restoreEco(save.sim.eco)
       : undefined,

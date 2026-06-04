@@ -28,11 +28,6 @@ function mature(seed: number, land: number, totalMs: number) {
   return { tank, sim };
 }
 
-function idsAt(seed: number, land: number, totalMs: number): string[] {
-  const { tank, sim } = mature(seed, land, totalMs);
-  return populationFor(tank, sim).map((e) => e.def.id);
-}
-
 describe("long-horizon roster", () => {
   test("the new arrivals exist in the roster", () => {
     const ids = new Set(SPECIES.map((s) => s.id));

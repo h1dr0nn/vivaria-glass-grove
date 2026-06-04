@@ -70,6 +70,8 @@ export const ECO_SPECIES = [
   "moss-snail",
   "leaf-beetle",
   "meadow-moth",
+  "pygmy-rasbora",
+  "cherry-barb",
 ] as const;
 export type EcoSpeciesId = (typeof ECO_SPECIES)[number];
 
@@ -101,6 +103,8 @@ const SPECIES_DEFS: Record<EcoSpeciesId, EcoSpeciesDef> = {
   "moss-snail": { eats: ["biofilm"], intake: 0.38, mortality: 0.15, reseed: 0.008, weatherKind: "land" },
   "leaf-beetle": { eats: ["biofilm"], intake: 0.45, mortality: 0.2, reseed: 0.01, weatherKind: "land" },
   "meadow-moth": { eats: ["biofilm"], intake: 0.4, mortality: 0.22, reseed: 0.012, weatherKind: "land" },
+  "pygmy-rasbora": { eats: ["plankton"], intake: 0.48, mortality: 0.17, reseed: 0.006, weatherKind: "water" },
+  "cherry-barb": { eats: ["plankton", "biofilm"], intake: 0.46, mortality: 0.16, reseed: 0.006, weatherKind: "water" },
 };
 
 /** predators of each prey species — derived once from the eats lists */
@@ -192,6 +196,8 @@ const PRESENCE_CHANCE: Record<EcoSpeciesId, number> = {
   "moss-snail": 0.7,
   "leaf-beetle": 0.65,
   "meadow-moth": 0.6,
+  "pygmy-rasbora": 0.55,
+  "cherry-barb": 0.45,
 };
 
 export function worldHasSpecies(seed: number, id: string): boolean {

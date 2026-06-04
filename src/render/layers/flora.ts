@@ -89,7 +89,7 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
     lastSim = sim;
     drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, sim, swayPhase);
     drawAlgae(algaeGfx, tank, layout, algaeAnchors, sim.scalars.algae);
-    drawTrees(treeGfx, layout, treeAnchors, sim.scalars.plants, swayPhase);
+    drawTrees(treeGfx, layout, treeAnchors, sim.scalars.plants, sim.treeAgeMs ?? 0, swayPhase);
     drawPlants(plantGfx, layout, plantAnchors, sim.scalars.plants, swayPhase);
     drawLilies(lilyGfx, tank, layout, lilyAnchors, sim.scalars.algae, swayPhase);
   };
@@ -98,7 +98,7 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
     swayPhase = timeMs / 1000;
     if (!lastSim) return;
     drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, lastSim, swayPhase);
-    drawTrees(treeGfx, layout, treeAnchors, lastSim.scalars.plants, swayPhase);
+    drawTrees(treeGfx, layout, treeAnchors, lastSim.scalars.plants, lastSim.treeAgeMs ?? 0, swayPhase);
     drawPlants(plantGfx, layout, plantAnchors, lastSim.scalars.plants, swayPhase);
     drawLilies(
       lilyGfx,
@@ -553,18 +553,25 @@ function pickTreeAnchors(tank: TankState, seed: number): TreeAnchor[] {
   }));
 }
 
+/** the trunk keeps thickening for ~40 in-game days, long after it's full height */
+const TREE_GIRTH_TAU_MS = 40 * 24 * 3_600_000;
+
 function drawTrees(
   g: Graphics,
   layout: TankLayout,
   anchors: readonly TreeAnchor[],
   plants: number,
+  treeAgeMs: number,
   phase: number,
 ): void {
   g.clear();
   const growth = clamp01((plants - TREE_START) / (1 - TREE_START));
   if (growth <= 0) return;
+  // girth is driven by AGE, not the plant scalar — the trunk slowly fattens
+  // over many days while height settles early (how a bonsai actually ages)
+  const girth = 1 - Math.exp(-treeAgeMs / TREE_GIRTH_TAU_MS);
   for (const anchor of anchors) {
-    drawTree(g, layout, anchor, growth, plants, phase);
+    drawTree(g, layout, anchor, growth, girth, plants, phase);
   }
 }
 
@@ -574,6 +581,7 @@ function drawTree(
   layout: TankLayout,
   anchor: TreeAnchor,
   growth: number,
+  girth: number,
   plants: number,
   phase: number,
 ): void {
@@ -585,8 +593,9 @@ function drawTree(
   // A BONSAI is SHORT and STOUT: a fat, gnarled, fast-tapering trunk with a
   // wide root flare (nebari) and foliage pruned into stacked horizontal
   // clouds. Height:girth ≈ 3-4:1, never the tall thin sapling we had.
-  const trunkPx = s * (7 + growth * 9); // 7..16 cells — short
-  const baseWidth = s * (2.2 + growth * 3.2); // 2.2..5.4 cells — THICK
+  const trunkPx = s * (7 + growth * 7); // 7..14 cells — short, set early
+  // girth fattens with AGE (1.6 sapling → ~6 cells old & gnarled)
+  const baseWidth = s * (1.6 + girth * 4.4);
   const sway = Math.sin(phase * 0.5 + v) * 0.05 * growth;
 
   // gnarled trunk: a couple of bends (movement) up a short spine
