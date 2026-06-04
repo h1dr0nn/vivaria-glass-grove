@@ -34,6 +34,33 @@ body {
   display: block;
 }
 
+/* Cozy scrollbars — thin, rounded, warm-tinted, fading into the panel */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: oklch(48% 0.04 80 / 0.45);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: oklch(62% 0.06 90 / 0.6);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* UI floats above the canvas; only panels capture pointer events */
 .ui-overlay {
   position: absolute;

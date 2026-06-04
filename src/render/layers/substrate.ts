@@ -77,72 +77,68 @@ export function buildSubstrate(tank: TankState, layout: TankLayout): Container {
   return container;
 }
 
-/**
- * Rocks and driftwood drawn as shaded shapes over their stamped footprint —
- * volume instead of flat gray cell-bands.
- */
-function buildHardscapeShapes(tank: TankState, layout: TankLayout): Graphics {
-  const g = new Graphics();
-  for (const piece of tank.hardscape) {
-    if (piece.kind === "rock") {
-      drawRock(g, layout, piece);
+/** Gentle highlight tracing the terrain surface — softens cell edges. */
+function buildSurfaceHighlight(tank: TankState, layout: TankLayout): Graphics {
+  const surface = new Graphics();
+  let penDown = false;
+  for (let x = 0; x < tank.width; x++) {
+    const h = tank.terrainHeight[x];
+    const px = screenX(layout, x) + layout.scale / 2;
+    const py = screenY(layout, h);
+    if (!penDown) {
+      surface.moveTo(px, py);
+      penDown = true;
     } else {
-      drawDriftwood(g, layout, piece);
+      surface.lineTo(px, py);
     }
   }
-  return g;
+  surface.stroke({
+    color: 0xf2e7c8,
+    alpha: 0.28,
+    width: Math.max(1, layout.scale * 0.35),
+  });
+  return surface;
 }
 
-function drawRock(g: Graphics, layout: TankLayout, piece: HardscapePiece): void {
-  const cx = screenX(layout, piece.x + 0.5);
-  const cy = screenY(layout, piece.y);
-  const rx = piece.halfWidth * layout.scale;
-  const ry = piece.halfHeight * layout.scale;
-
-  // soft contact shadow grounding the rock
-  g.ellipse(cx, cy + ry * 0.75, rx * 0.95, ry * 0.3).fill({
-    color: SCENE.soilDark,
-    alpha: 0.3,
-  });
-  // body
-  g.ellipse(cx, cy, rx, ry).fill(SCENE.rock);
-  // lower shading
-  g.ellipse(cx + rx * 0.06, cy + ry * 0.3, rx * 0.88, ry * 0.62).fill({
-    color: SCENE.rockShadow,
-    alpha: 0.45,
-  });
-  // top-left light
-  g.ellipse(cx - rx * 0.28, cy - ry * 0.42, rx * 0.45, ry * 0.32).fill({
-    color: 0xb9b4a8,
-    alpha: 0.55,
-  });
+/**
+ * Driftwood drawn as shaded logs LYING ALONG the bank — each piece is its
+ * own Graphics rotated to the local terrain slope.
+ */
+function buildHardscapeShapes(tank: TankState, layout: TankLayout): Container {
+  const container = new Container();
+  for (const piece of tank.hardscape) {
+    if (piece.kind === "driftwood") {
+      container.addChild(buildDriftwood(tank, layout, piece));
+    }
+  }
+  return container;
 }
 
-function drawDriftwood(
-  g: Graphics,
+function buildDriftwood(
+  tank: TankState,
   layout: TankLayout,
   piece: HardscapePiece,
-): void {
-  const cx = screenX(layout, piece.x + 0.5);
-  const cy = screenY(layout, piece.y);
+): Graphics {
+  const g = new Graphics();
   const rx = piece.halfWidth * layout.scale;
   const ry = Math.max(piece.halfHeight * layout.scale, layout.scale * 1.1);
 
-  g.ellipse(cx, cy + ry * 0.7, rx * 0.9, ry * 0.28).fill({
+  // local coords: origin at the log's center
+  g.ellipse(0, ry * 0.7, rx * 0.9, ry * 0.28).fill({
     color: SCENE.soilDark,
     alpha: 0.28,
   });
-  g.roundRect(cx - rx, cy - ry * 0.55, rx * 2, ry * 1.1, ry * 0.5).fill(
-    SCENE.wood,
-  );
+  g.roundRect(-rx, -ry * 0.55, rx * 2, ry * 1.1, ry * 0.5).fill(SCENE.wood);
   // underside shading
-  g.roundRect(cx - rx * 0.96, cy + ry * 0.05, rx * 1.92, ry * 0.45, ry * 0.25)
-    .fill({ color: SCENE.woodDark, alpha: 0.6 });
+  g.roundRect(-rx * 0.96, ry * 0.05, rx * 1.92, ry * 0.45, ry * 0.25).fill({
+    color: SCENE.woodDark,
+    alpha: 0.6,
+  });
   // grain lines
   for (let i = 0; i < 3; i++) {
-    const ly = cy - ry * 0.3 + i * ry * 0.28;
-    g.moveTo(cx - rx * (0.8 - i * 0.1), ly)
-      .lineTo(cx + rx * (0.75 - i * 0.12), ly)
+    const ly = -ry * 0.3 + i * ry * 0.28;
+    g.moveTo(-rx * (0.8 - i * 0.1), ly)
+      .lineTo(rx * (0.75 - i * 0.12), ly)
       .stroke({
         color: SCENE.woodDark,
         alpha: 0.5,
@@ -150,10 +146,20 @@ function drawDriftwood(
       });
   }
   // a worn end cap
-  g.ellipse(cx + rx * 0.92, cy - ry * 0.05, ry * 0.32, ry * 0.4).fill({
+  g.ellipse(rx * 0.92, -ry * 0.05, ry * 0.32, ry * 0.4).fill({
     color: SCENE.woodDark,
     alpha: 0.8,
   });
+
+  // settle onto the bank: position at the surface, lean with the slope
+  const left = Math.max(0, piece.x - piece.halfWidth);
+  const right = Math.min(tank.width - 1, piece.x + piece.halfWidth);
+  const rise =
+    (tank.terrainHeight[right] - tank.terrainHeight[left]) * layout.scale;
+  const run = (right - left) * layout.scale;
+  g.rotation = run > 0 ? -Math.atan2(rise, run) : 0;
+  g.position.set(screenX(layout, piece.x + 0.5), screenY(layout, piece.y));
+  return g;
 }
 
 function drawColumn(
@@ -217,29 +223,6 @@ function buildPebbles(
     });
   }
   return g;
-}
-
-/** Gentle highlight tracing the terrain surface — softens cell edges. */
-function buildSurfaceHighlight(tank: TankState, layout: TankLayout): Graphics {
-  const surface = new Graphics();
-  let penDown = false;
-  for (let x = 0; x < tank.width; x++) {
-    const h = tank.terrainHeight[x];
-    const px = screenX(layout, x) + layout.scale / 2;
-    const py = screenY(layout, h);
-    if (!penDown) {
-      surface.moveTo(px, py);
-      penDown = true;
-    } else {
-      surface.lineTo(px, py);
-    }
-  }
-  surface.stroke({
-    color: 0xf2e7c8,
-    alpha: 0.28,
-    width: Math.max(1, layout.scale * 0.35),
-  });
-  return surface;
 }
 
 /** Rock/wood cells are skipped here — drawn as shaded shapes on top. */

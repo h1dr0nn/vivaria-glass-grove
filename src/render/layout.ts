@@ -10,10 +10,17 @@ export interface TankLayout {
   readonly originY: number;
   readonly tankWidthPx: number;
   readonly tankHeightPx: number;
+  /** cabinet-oblique receding-depth vector: back plane = front + (depthX, depthY) */
+  readonly depthX: number;
+  readonly depthY: number;
 }
 
 const HORIZONTAL_FILL = 0.78;
 const VERTICAL_FILL = 0.74;
+/** how deep the visible top faces read, in cells */
+const DEPTH_CELLS = 3;
+/** recede angle — mostly vertical so the rim reads as seen slightly from above */
+const DEPTH_ANGLE_RAD = (62 * Math.PI) / 180;
 
 export function computeLayout(
   viewWidth: number,
@@ -26,12 +33,15 @@ export function computeLayout(
   );
   const tankWidthPx = tank.width * scale;
   const tankHeightPx = tank.height * scale;
+  const depthPx = scale * DEPTH_CELLS;
   return {
     scale,
     originX: (viewWidth - tankWidthPx) / 2,
     originY: (viewHeight + tankHeightPx) / 2,
     tankWidthPx,
     tankHeightPx,
+    depthX: depthPx * Math.cos(DEPTH_ANGLE_RAD),
+    depthY: -depthPx * Math.sin(DEPTH_ANGLE_RAD),
   };
 }
 

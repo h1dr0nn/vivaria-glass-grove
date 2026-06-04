@@ -10,6 +10,10 @@ import { populationFor } from "./sim/species";
 import type { SimEvent, SimState } from "./sim/types";
 import { createGameLoop, type GameLoop } from "./game/loop";
 import {
+  createWindowMotionTracker,
+  type WindowMotionTracker,
+} from "./render/windowMotion";
+import {
   bindAudioVisibility,
   loadMutePreference,
   playChime,
@@ -69,7 +73,32 @@ export default function App() {
   let ambientInterval: ReturnType<typeof setInterval> | undefined;
   let autosaveInterval: ReturnType<typeof setInterval> | undefined;
   let activeTank: TankState | null = null;
+  let motionTracker: WindowMotionTracker | undefined;
+  let settleRaf: number | undefined;
   const storage = createStorage();
+
+  // short-lived 60fps loop while the slosh spring rings; self-terminates
+  // the moment the water sleeps, handing back to the slow ambient ticker
+  const startSettleLoop = (): void => {
+    if (settleRaf !== undefined) return;
+    const frame = (now: number): void => {
+      settleRaf = undefined;
+      if (!view || document.visibilityState !== "visible") return;
+      view.tick(now);
+      markDirty();
+      if (view.isSloshing()) {
+        settleRaf = requestAnimationFrame(frame);
+      }
+    };
+    settleRaf = requestAnimationFrame(frame);
+  };
+
+  const stopSettleLoop = (): void => {
+    if (settleRaf !== undefined) {
+      cancelAnimationFrame(settleRaf);
+      settleRaf = undefined;
+    }
+  };
 
   const persist = (): void => {
     const currentSim = loop?.current() ?? sim();
@@ -129,6 +158,16 @@ export default function App() {
 
     clearInterval(autosaveInterval);
     autosaveInterval = setInterval(persist, AUTOSAVE_MS);
+
+    // dragging the window sloshes the water — cozy juice
+    motionTracker?.dispose();
+    motionTracker = createWindowMotionTracker({
+      onImpulse: (ax, ay) => {
+        if (!view || document.visibilityState !== "visible") return;
+        view.applyWindowImpulse(ax, ay);
+        startSettleLoop();
+      },
+    });
 
     startAmbient({
       waterAmount: newTank.env.waterFraction,
@@ -192,6 +231,9 @@ export default function App() {
     loop = undefined;
     clearInterval(ambientInterval);
     clearInterval(autosaveInterval);
+    motionTracker?.dispose();
+    motionTracker = undefined;
+    stopSettleLoop();
     view?.destroy();
     view = undefined;
     activeTank = null;
@@ -261,6 +303,8 @@ export default function App() {
     loop?.stop();
     clearInterval(ambientInterval);
     clearInterval(autosaveInterval);
+    motionTracker?.dispose();
+    stopSettleLoop();
     view?.destroy();
     destroyPixiApp();
   });

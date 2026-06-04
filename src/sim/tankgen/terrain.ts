@@ -76,7 +76,44 @@ export function generateTerrain(
     terrainHeight[x] = Math.min(usableHeight - 4, Math.max(2, h));
   }
 
+  fillHiddenPockets(terrainHeight, waterlineY);
+
   return { terrainHeight, waterlineY };
+}
+
+/**
+ * ONE clean body of water: noise can dip land columns back below the
+ * waterline behind the bank crest, creating hidden pocket-ponds that render
+ * as glitchy pale patches inside the hill. Keep only the widest water run;
+ * raise every other pocket just above the waterline (it reads as a berm).
+ */
+function fillHiddenPockets(terrain: number[], waterlineY: number): void {
+  if (waterlineY <= 0) return;
+  interface Run {
+    start: number;
+    end: number;
+  }
+  const runs: Run[] = [];
+  let start = -1;
+  for (let x = 0; x <= terrain.length; x++) {
+    const isWater = x < terrain.length && terrain[x] < waterlineY;
+    if (isWater && start < 0) start = x;
+    if (!isWater && start >= 0) {
+      runs.push({ start, end: x });
+      start = -1;
+    }
+  }
+  if (runs.length <= 1) return;
+  let main = runs[0];
+  for (const run of runs) {
+    if (run.end - run.start > main.end - main.start) main = run;
+  }
+  for (const run of runs) {
+    if (run === main) continue;
+    for (let x = run.start; x < run.end; x++) {
+      terrain[x] = waterlineY + 1;
+    }
+  }
 }
 
 /** Submerged cell count for a given water surface row (used by env/tests). */

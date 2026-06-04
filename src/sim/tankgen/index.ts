@@ -4,7 +4,7 @@ import {
   computeZones,
   summarizeEnv,
 } from "./fields";
-import { placeHardscape, stampHardscape } from "./hardscape";
+import { placeHardscape } from "./hardscape";
 import { buildMaterials } from "./materials";
 import { generateTerrain } from "./terrain";
 import { GEN_VERSION, archetypeOf, type TankState } from "./types";
@@ -51,6 +51,8 @@ export function generateTank(
     usableHeight,
     normalizedSeed,
   );
+  // hardscape is cosmetic — drawn rotated along the slope by the renderer,
+  // never stamped into the grid (an unrotated stamp punches holes in hills)
   const hardscape = placeHardscape(
     terrainHeight,
     waterlineY,
@@ -58,7 +60,6 @@ export function generateTank(
     usableHeight,
     normalizedSeed,
   );
-  stampHardscape(materials, hardscape, width, height);
 
   const light = computeLight(materials, width, height);
   const moisture = computeMoisture(

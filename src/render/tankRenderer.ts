@@ -2,6 +2,7 @@ import { ColorMatrixFilter, Container, Graphics } from "pixi.js";
 import type { SimState } from "../sim/types";
 import type { PopulationEntry } from "../sim/species";
 import type { TankState } from "../sim/tankgen";
+import { createSlosh } from "./slosh";
 import { computeLayout } from "./layout";
 import { buildBackdrop } from "./layers/backdrop";
 import { buildCreatures } from "./layers/creatures";
@@ -35,6 +36,10 @@ export interface TankView {
   update(sim: SimState, population: readonly PopulationEntry[]): void;
   /** ambient motion frame — call ONLY from the visible-gated slow ticker */
   tick(timeMs: number): void;
+  /** window drag kicked the tank — purely cosmetic */
+  applyWindowImpulse(ax: number, ay: number): void;
+  /** true while the water is still ringing from an impulse */
+  isSloshing(): boolean;
   destroy(): void;
 }
 
@@ -55,6 +60,7 @@ export function buildTankView(
   const water = buildWater(tank, layout);
   const flora = buildFlora(tank, layout);
   const creatures = buildCreatures(tank, layout);
+  const glass = buildGlass(layout);
 
   // the slow indigo of night, laid over the whole scene
   const night = new Graphics();
@@ -63,12 +69,13 @@ export function buildTankView(
 
   root.addChild(
     buildBackdrop(viewWidth, viewHeight, layout),
+    glass.back,
     water.behind,
     buildSubstrate(tank, layout),
     flora.container,
     creatures.container,
     water.overlay,
-    buildGlass(layout),
+    glass.front,
     night,
   );
 
@@ -84,6 +91,9 @@ export function buildTankView(
 
   stage.addChild(root);
 
+  const slosh = createSlosh();
+  let lastTickMs = 0;
+
   return {
     update(sim: SimState, population: readonly PopulationEntry[]): void {
       flora.update(sim);
@@ -91,9 +101,19 @@ export function buildTankView(
       night.alpha = NIGHT_MAX_ALPHA * nightStrength(sim.simTimeMs);
     },
     tick(timeMs: number): void {
+      const dt =
+        lastTickMs === 0 ? 0.08 : Math.min(0.25, (timeMs - lastTickMs) / 1000);
+      lastTickMs = timeMs;
+      slosh.step(dt);
       flora.tick(timeMs);
       creatures.tick(timeMs);
-      water.ripple(timeMs / 700);
+      water.ripple(timeMs / 700, slosh.read());
+    },
+    applyWindowImpulse(ax: number, ay: number): void {
+      slosh.impulse(ax, ay);
+    },
+    isSloshing(): boolean {
+      return slosh.isAwake();
     },
     destroy(): void {
       root.destroy({ children: true });
