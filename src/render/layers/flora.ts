@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { mulberry32, splitSeed } from "../../sim/rng";
+import { environmentAt } from "../../sim/ecology";
 import type { SimState } from "../../sim/types";
 import { ZONE, cellIndex, type TankState } from "../../sim/tankgen";
 import { SCENE } from "../palette";
@@ -85,29 +86,31 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
   let lastSim: SimState | null = null;
   let swayPhase = 0;
 
+  // how lush the planting looks this season — fuller in summer, sparser in
+  // winter, so the underwater garden visibly waxes and wanes over the years
+  const lushOf = (sim: SimState): number => {
+    const env = environmentAt(sim.seed, sim.simTimeMs);
+    const warmth = 0.5 + 0.5 * Math.sin(env.seasonPhase * Math.PI * 2);
+    return 0.6 + 0.4 * warmth;
+  };
+
+  const render = (sim: SimState): void => {
+    const lush = lushOf(sim);
+    drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, sim, swayPhase);
+    drawAlgae(algaeGfx, tank, layout, algaeAnchors, sim.scalars.algae, lush, swayPhase);
+    drawTrees(treeGfx, layout, treeAnchors, sim.scalars.plants, sim.treeAgeMs ?? 0, swayPhase);
+    drawPlants(plantGfx, layout, plantAnchors, sim.scalars.plants, lush, swayPhase);
+    drawLilies(lilyGfx, tank, layout, lilyAnchors, sim.scalars.algae, swayPhase);
+  };
+
   const update = (sim: SimState): void => {
     lastSim = sim;
-    drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, sim, swayPhase);
-    drawAlgae(algaeGfx, tank, layout, algaeAnchors, sim.scalars.algae);
-    drawTrees(treeGfx, layout, treeAnchors, sim.scalars.plants, sim.treeAgeMs ?? 0, swayPhase);
-    drawPlants(plantGfx, layout, plantAnchors, sim.scalars.plants, swayPhase);
-    drawLilies(lilyGfx, tank, layout, lilyAnchors, sim.scalars.algae, swayPhase);
+    render(sim);
   };
 
   const tick = (timeMs: number): void => {
     swayPhase = timeMs / 1000;
-    if (!lastSim) return;
-    drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, lastSim, swayPhase);
-    drawTrees(treeGfx, layout, treeAnchors, lastSim.scalars.plants, lastSim.treeAgeMs ?? 0, swayPhase);
-    drawPlants(plantGfx, layout, plantAnchors, lastSim.scalars.plants, swayPhase);
-    drawLilies(
-      lilyGfx,
-      tank,
-      layout,
-      lilyAnchors,
-      lastSim.scalars.algae,
-      swayPhase,
-    );
+    if (lastSim) render(lastSim);
   };
 
   return { container, update, tick };
@@ -259,6 +262,8 @@ function drawAlgae(
   layout: TankLayout,
   anchors: readonly Anchor[],
   algae: number,
+  lush: number,
+  phase: number,
 ): void {
   g.clear();
   if (algae <= 0.005) return;
@@ -276,16 +281,18 @@ function drawAlgae(
     ).fill({ color: SCENE.algae, alpha: filmAlpha });
   }
 
-  // tufts wake up one by one as the bloom spreads
+  // tufts wake up one by one as the bloom spreads — they wave underwater and
+  // fill out in summer / thin in winter (lush)
   for (const anchor of anchors) {
-    const growth = staggeredGrowth(algae, anchor.threshold);
-    if (growth <= 0) continue;
+    const growth = staggeredGrowth(algae, anchor.threshold) * lush;
+    if (growth <= 0.02) continue;
     const cx = screenX(layout, anchor.x + 0.5);
     const cy = screenY(layout, anchor.y + 0.2);
     const size = layout.scale * (1 + growth * 3.6) * (0.75 + (anchor.variant % 4) * 0.12);
+    const wave = Math.sin(phase * 1.1 + anchor.variant) * 0.35;
     const blades = 3 + (anchor.variant % 4);
     for (let b = 0; b < blades; b++) {
-      const lean = (b / (blades - 1) - 0.5) * 1.7;
+      const lean = (b / (blades - 1) - 0.5) * 1.7 + wave;
       g.moveTo(cx, cy)
         .quadraticCurveTo(
           cx + lean * size * 0.5,
@@ -309,15 +316,17 @@ function drawPlants(
   layout: TankLayout,
   anchors: readonly Anchor[],
   plants: number,
+  lush: number,
   phase: number,
 ): void {
   g.clear();
   if (plants <= 0.005) return;
 
   for (const anchor of anchors) {
-    const growth = staggeredGrowth(plants, anchor.threshold);
-    if (growth <= 0) continue;
-    const sway = Math.sin(phase * 0.8 + anchor.variant) * 0.12 * growth;
+    const growth = staggeredGrowth(plants, anchor.threshold) * lush;
+    if (growth <= 0.02) continue;
+    // a clearly visible underwater/breeze sway
+    const sway = Math.sin(phase * 0.9 + anchor.variant) * 0.22 * growth;
     switch (anchor.kind) {
       case "fern":
         drawFern(g, layout, anchor, growth, sway);
@@ -590,21 +599,28 @@ function drawTree(
   const v = anchor.variant;
   const leanSign = v % 2 === 0 ? 1 : -1;
   const s = layout.scale;
-  // A BONSAI is SHORT and STOUT: a fat, gnarled, fast-tapering trunk with a
-  // wide root flare (nebari) and foliage pruned into stacked horizontal
-  // clouds. Height:girth ≈ 3-4:1, never the tall thin sapling we had.
-  const trunkPx = s * (7 + growth * 7); // 7..14 cells — short, set early
-  // girth fattens with AGE (1.6 sapling → ~6 cells old & gnarled)
-  const baseWidth = s * (1.6 + girth * 4.4);
-  const sway = Math.sin(phase * 0.5 + v) * 0.05 * growth;
+  // seeded 0..1 helper so every tree gets its own proportions & bends
+  const rv = (k: number): number => {
+    const x = Math.sin(v * 12.9898 + k * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  // The tree GROWS over the years: it keeps gaining height and new canopy
+  // tiers with age (girth), and each tree's bends/tiers are seeded so no two
+  // tanks look alike. Height climbs to ~30 cells — about double the old cap.
+  const trunkPx = s * (12 + growth * 8 + girth * 14); // up to ~34 cells
+  const baseWidth = s * (1.6 + girth * 4.4); // girth fattens with age
+  // a clearly visible canopy breeze
+  const sway = Math.sin(phase * 0.8 + v) * 0.04 + 0.02;
 
-  // gnarled trunk: a couple of bends (movement) up a short spine
-  const bend = (0.7 + (v % 4) * 0.25) * leanSign;
+  // gnarled trunk: two seeded bends up a tall spine (movement)
+  const bend1 = (0.6 + rv(1) * 0.9) * leanSign;
+  const bend2 = (0.5 + rv(2) * 0.8) * -leanSign;
   const spine = (t: number): [number, number] => {
     const x =
       baseX +
-      Math.sin(t * Math.PI * 1.3) * bend * s * 1.4 +
-      sway * t * trunkPx;
+      Math.sin(t * Math.PI * 1.1) * bend1 * s * 1.6 +
+      Math.sin(t * Math.PI * 2.1) * bend2 * s * 0.7 +
+      Math.sin(phase * 0.6 + v) * t * t * s * 0.5; // top sways most
     const y = baseY - t * trunkPx;
     return [x, y];
   };
@@ -651,35 +667,66 @@ function drawTree(
       .stroke({ color: SCENE.woodDark, width: Math.max(1, s * 0.18), alpha: 0.5 });
   }
 
-  // foliage as STACKED HORIZONTAL CLOUD PADS (cloud-pruned tiers) — the
-  // defining bonsai canopy. Lower tiers wider, apex rounded.
-  const tierCount = 2 + Math.floor(growth * 2); // 2..4 tiers
-  const padScale = s * (1.5 + growth * 1.8);
+  // foliage as cloud pads carried on BRANCHES that reach out to the sides —
+  // each tier is a branch + its cloud, well-spaced up the trunk so the
+  // canopy reads as layered limbs, not one crammed clump.
+  const tierCount = 2 + Math.round(girth * 4); // 2..6 tiers over the years
+  const padScale = s * (1.6 + growth * 1.4 + girth * 1.0);
   interface Pad {
     cx: number;
     cy: number;
     rx: number;
     ry: number;
+    phase: number;
   }
   const pads: Pad[] = [];
+  // branches start low on the trunk and climb to the apex, alternating sides
+  const lowest = 0.4;
   for (let tier = 0; tier < tierCount; tier++) {
-    const ft = tier / Math.max(1, tierCount - 1); // 0 bottom .. 1 apex
-    const [tx, ty] = spine(0.5 + ft * 0.5);
-    // bottom tiers are broad shelves, the apex is a compact dome
-    const tierWidth = padScale * (1.9 - ft * 1.0);
-    const side = tier % 2 === 0 ? leanSign : -leanSign;
-    const cx = tx + side * tierWidth * 0.25;
-    const cy = ty - padScale * 0.2;
+    const ft = tierCount <= 1 ? 1 : tier / (tierCount - 1); // 0 bottom .. 1 apex
+    const [tx, ty] = spine(lowest + ft * (1 - lowest));
+    const isApex = tier === tierCount - 1;
+    // alternate sides up the trunk (apex sits centered on top)
+    const side = isApex ? 0 : rv(tier * 2 + 9) < 0.5 ? leanSign : -leanSign;
+    // the branch REACHES OUT — longer on lower tiers, shorter near the apex
+    const reach = isApex ? 0 : padScale * (1.4 - ft * 0.7) * (0.8 + rv(tier * 4 + 1) * 0.5);
+    const droop = s * 0.4; // branches angle gently downward
+    const tipX = tx + side * reach;
+    const tipY = ty + droop * (1 - ft);
+    if (!isApex) {
+      g.moveTo(tx, ty)
+        .quadraticCurveTo(
+          tx + side * reach * 0.5,
+          ty + droop * 0.3,
+          tipX,
+          tipY,
+        )
+        .stroke({
+          color: SCENE.woodDark,
+          width: Math.max(1, baseWidth * 0.22 * (1 - ft * 0.5)),
+          alpha: 0.9,
+        });
+    }
+    // the cloud sits at the branch tip
+    const tierWidth = padScale * (1.5 - ft * 0.6) * (0.85 + rv(tier * 3 + 5) * 0.4);
+    const cx = tipX + side * tierWidth * 0.15;
+    const cy = tipY - tierWidth * 0.28;
     const blobs = 3 + (tier % 2);
     for (let b = 0; b < blobs; b++) {
       const bt = (b / (blobs - 1) - 0.5) * 2;
       pads.push({
-        cx: cx + bt * tierWidth * 0.5 + sway * padScale * 0.4,
-        cy: cy - Math.cos(bt * 1.2) * padScale * 0.18,
-        rx: tierWidth * (0.42 - Math.abs(bt) * 0.08),
-        ry: tierWidth * 0.3,
+        cx: cx + bt * tierWidth * 0.45,
+        cy: cy - Math.cos(bt * 1.2) * tierWidth * 0.16,
+        rx: tierWidth * (0.4 - Math.abs(bt) * 0.07),
+        ry: tierWidth * 0.28,
+        phase: v + tier * 1.7 + b * 0.9, // each blob shimmers on its own
       });
     }
+  }
+  // a visible breeze through the whole canopy + per-blob leaf shimmer
+  for (const p of pads) {
+    p.cx += (sway + Math.sin(phase * 1.4 + p.phase) * 0.06) * padScale;
+    p.cy += Math.sin(phase * 1.1 + p.phase * 1.3) * padScale * 0.05;
   }
   for (const p of pads) {
     g.ellipse(p.cx + p.rx * 0.1, p.cy + p.ry * 0.35, p.rx * 0.95, p.ry * 0.9).fill({
