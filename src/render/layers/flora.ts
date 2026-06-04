@@ -340,7 +340,10 @@ function drawFern(
   }
 }
 
-/** A soft green dome with tiny spore stalks — the highland look. */
+/**
+ * A proper moss MOUND — domed, stippled, hugging the ground. (The old flat
+ * ellipse read as a lily pad sitting on dirt — user confusion.)
+ */
 function drawMossCushion(
   g: Graphics,
   layout: TankLayout,
@@ -348,32 +351,62 @@ function drawMossCushion(
   growth: number,
 ): void {
   const baseX = screenX(layout, anchor.x + 0.5);
-  const baseY = screenY(layout, anchor.y);
-  const width = layout.scale * (1.4 + growth * 3.4);
-  const height = layout.scale * (0.6 + growth * 1.3);
+  const baseY = screenY(layout, anchor.y + 0.05);
+  const width = layout.scale * (1.1 + growth * 2.1);
+  const height = width * (0.5 + (anchor.variant % 3) * 0.09);
 
-  g.ellipse(baseX, baseY - height * 0.3, width, height).fill({
-    color: SCENE.moss,
-    alpha: 0.95,
-  });
-  g.ellipse(baseX - width * 0.25, baseY - height * 0.55, width * 0.5, height * 0.5).fill({
-    color: SCENE.leafLight,
-    alpha: 0.5,
-  });
+  // a true MOUND: arched top, FLAT base merging into the ground —
+  // a full ellipse painted over the dirt reads as a floating pad
+  const SAMPLES = 10;
+  const arch: number[] = [baseX - width, baseY];
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+    const bump = Math.sin(t * Math.PI) ** 0.8;
+    const lobe =
+      0.82 +
+      0.18 * Math.sin(t * 7 + anchor.variant) *
+        Math.sin(t * 3.3 + anchor.variant * 1.7);
+    arch.push(baseX - width + t * 2 * width, baseY - height * bump * lobe);
+  }
+  arch.push(baseX + width, baseY);
+  g.poly(arch).fill(SCENE.moss);
+  // shaded right flank + lit crown
+  g.poly([
+    baseX, baseY,
+    baseX + width * 0.2, baseY - height * 0.78,
+    baseX + width * 0.62, baseY - height * 0.5,
+    baseX + width, baseY,
+  ]).fill({ color: SCENE.algaeDeep, alpha: 0.55 });
+  g.ellipse(
+    baseX - width * 0.25,
+    baseY - height * 0.68,
+    width * 0.34,
+    height * 0.18,
+  ).fill({ color: SCENE.leafLight, alpha: 0.5 });
+  // stipple — tiny tufts that say "moss", not "leaf"
+  for (let d = 0; d < 5; d++) {
+    const dx = Math.sin(anchor.variant * 3.7 + d * 2.4) * width * 0.55;
+    const t = Math.abs(dx) / width;
+    const dy = -height * Math.sin(Math.min(1, 1 - t) * Math.PI * 0.5) * (0.35 + ((anchor.variant + d) % 3) * 0.15);
+    g.circle(baseX + dx, baseY + dy, layout.scale * 0.12).fill({
+      color: d % 2 === 0 ? SCENE.leafLight : SCENE.algaeDeep,
+      alpha: 0.6,
+    });
+  }
   // spore stalks rise from a mature cushion
   if (growth > 0.5) {
     const stalks = 1 + (anchor.variant % 3);
     for (let s = 0; s < stalks; s++) {
-      const sx = baseX + (s - stalks / 2) * width * 0.4;
-      const sh = height * (1.6 + (s % 2) * 0.5);
-      g.moveTo(sx, baseY - height * 0.5)
-        .lineTo(sx, baseY - height * 0.5 - sh)
+      const sx = baseX + (s - stalks / 2) * width * 0.45;
+      const sh = height * (0.9 + (s % 2) * 0.3);
+      g.moveTo(sx, baseY - height * 0.45)
+        .lineTo(sx, baseY - height * 0.45 - sh)
         .stroke({
           color: SCENE.algaeDeep,
           alpha: 0.8,
           width: Math.max(0.8, layout.scale * 0.12),
         });
-      g.circle(sx, baseY - height * 0.5 - sh, layout.scale * 0.18).fill({
+      g.circle(sx, baseY - height * 0.45 - sh, layout.scale * 0.16).fill({
         color: 0xc9a86a,
         alpha: 0.9,
       });
