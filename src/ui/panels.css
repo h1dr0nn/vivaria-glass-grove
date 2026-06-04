@@ -80,6 +80,40 @@
   color: var(--color-text-soft);
 }
 
+.menu-secondary {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-base);
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  background: transparent;
+  border: 1px dashed oklch(48% 0.04 80 / 0.7);
+  border-radius: var(--radius-soft);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out-soft),
+    border-color var(--duration-fast) var(--ease-out-soft);
+}
+
+.menu-secondary:hover {
+  color: var(--color-bloom);
+  border-color: oklch(70% 0.08 95 / 0.7);
+}
+
+.menu-back {
+  align-self: center;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out-soft);
+}
+
+.menu-back:hover {
+  color: var(--color-text);
+}
+
 .grow-button-warning {
   background: linear-gradient(
     176deg,

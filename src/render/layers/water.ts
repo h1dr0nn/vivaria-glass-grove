@@ -177,6 +177,74 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       alpha: 0.7,
       width: Math.max(1, layout.scale * 0.35),
     });
+
+    // Foam at the shore. In this projection the water's edge against the
+    // bank is not a point — it is the SEGMENT joining the near-line contact
+    // P0 to the far-line contact P1 (= P0 + depth vector). The contact line
+    // is drawn and the bubbles are strung along it, shrinking toward the
+    // back, churning harder during a slosh.
+    const churn = 1 + (slosh?.wave ?? 0) * 2.2;
+    const foam = (boundary: number, into: 1 | -1): void => {
+      const x0 = screenX(layout, boundary);
+      const y0 = frontY(boundary);
+      const x1 = x0 + layout.depthX;
+      const y1 = backY(boundary);
+
+      // the water's edge running into the screen along the bank
+      surfaceLine
+        .moveTo(x0, y0)
+        .lineTo(x1, y1)
+        .stroke({
+          color: SCENE.surfaceLine,
+          alpha: 0.65,
+          width: Math.max(1, layout.scale * 0.3),
+        });
+
+      // bubbles riding the contact segment
+      const COUNT = 7;
+      for (let i = 0; i < COUNT; i++) {
+        const t = i / (COUNT - 1);
+        const wobX =
+          Math.sin(phase * 0.9 + i * 2.1 + boundary * 0.7) *
+          layout.scale *
+          0.18;
+        const wobY =
+          Math.cos(phase * 1.3 + i * 1.7 + boundary * 0.31) *
+          layout.scale *
+          0.12;
+        const radius =
+          layout.scale *
+          (0.36 - t * 0.14) *
+          churn *
+          (0.8 + 0.2 * Math.sin(phase * 1.1 + i * 2.7 + boundary));
+        if (radius < 0.5) continue;
+        surfaceLine
+          .circle(x0 + (x1 - x0) * t + wobX, y0 + (y1 - y0) * t + wobY, radius)
+          .fill({ color: 0xf2faf6, alpha: Math.max(0.25, 0.7 - t * 0.35) });
+      }
+
+      // a couple of stray bubbles lapping from the near contact into the water
+      for (let j = 0; j < 3; j++) {
+        const drift = (j + 0.8) * 0.55;
+        const fx = screenX(layout, boundary + into * drift);
+        const fy =
+          frontY(boundary + into * drift) +
+          Math.sin(phase * 1.2 + j * 2.3 + boundary) * layout.scale * 0.14;
+        const radius =
+          layout.scale *
+          (0.22 - j * 0.05) *
+          churn *
+          (0.8 + 0.2 * Math.cos(phase + j * 1.9));
+        if (radius < 0.5) continue;
+        surfaceLine
+          .circle(fx, fy, radius)
+          .fill({ color: 0xf2faf6, alpha: 0.5 - j * 0.12 });
+      }
+    };
+    for (const run of bandRuns) {
+      if (run.start > 0) foam(run.start, 1); // land on the left
+      if (run.end < width) foam(run.end, -1); // land on the right
+    }
   };
   ripple(0);
 

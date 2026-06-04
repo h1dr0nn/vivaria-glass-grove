@@ -52,9 +52,13 @@ export default function NewTankScreen(props: NewTankScreenProps) {
   const [land, setLand] = createSignal(35);
   const [seedText, setSeedText] = createSignal("first jar");
   const [confirmingReplace, setConfirmingReplace] = createSignal(false);
+  // with an existing world the creation panel stays tucked away —
+  // a stray click must never threaten the player's save
+  const [creating, setCreating] = createSignal(false);
 
   const seed = createMemo(() => seedFromText(seedText()));
   const archetype = createMemo(() => ARCHETYPE_COPY[archetypeOf(land())]);
+  const showCreation = createMemo(() => !props.savedGame || creating());
 
   const rollSeed = (): void => {
     setSeedText(String(Math.floor(Math.random() * 0xffffffff)));
@@ -101,62 +105,91 @@ export default function NewTankScreen(props: NewTankScreenProps) {
           )}
         </Show>
 
-        <TankPreview seed={seed()} land={land()} />
-
-        <div class="archetype-line">
-          <span class="archetype-name">{archetype().name}</span>
-          <span class="archetype-blurb">{archetype().blurb}</span>
-        </div>
-
-        <label class="slider-row" for="land-slider">
-          <span class="slider-label water-label">water</span>
-          <input
-            id="land-slider"
-            type="range"
-            min="0"
-            max="100"
-            value={land()}
-            onInput={(e) => setLand(Number.parseInt(e.currentTarget.value, 10))}
-          />
-          <span class="slider-label land-label">land</span>
-        </label>
-        <div class="slider-value">
-          {100 - land()}% water · {land()}% land
-        </div>
-
-        <div class="seed-row">
-          <input
-            type="text"
-            class="seed-input"
-            value={seedText()}
-            onInput={(e) => setSeedText(e.currentTarget.value)}
-            placeholder="seed — any words you like"
-            aria-label="World seed"
-          />
+        <Show when={props.savedGame && !creating()}>
           <button
             type="button"
-            class="dice-button"
-            onClick={rollSeed}
-            title="Random seed"
-            aria-label="Random seed"
+            class="menu-secondary"
+            disabled={!props.ready}
+            onClick={() => setCreating(true)}
           >
-            <IconDice size={18} />
+            Start a new world…
           </button>
-        </div>
+        </Show>
 
-        <button
-          type="button"
-          class="grow-button"
-          classList={{ "grow-button-warning": confirmingReplace() }}
-          disabled={!props.ready}
-          onClick={handleStart}
-        >
-          {confirmingReplace()
-            ? "Replace your current world?"
-            : props.savedGame
-              ? "Start a new world"
-              : "Begin growing"}
-        </button>
+        <Show when={showCreation()}>
+          <TankPreview seed={seed()} land={land()} />
+
+          <div class="archetype-line">
+            <span class="archetype-name">{archetype().name}</span>
+            <span class="archetype-blurb">{archetype().blurb}</span>
+          </div>
+
+          <label class="slider-row" for="land-slider">
+            <span class="slider-label water-label">water</span>
+            <input
+              id="land-slider"
+              type="range"
+              min="0"
+              max="100"
+              value={land()}
+              onInput={(e) =>
+                setLand(Number.parseInt(e.currentTarget.value, 10))
+              }
+            />
+            <span class="slider-label land-label">land</span>
+          </label>
+          <div class="slider-value">
+            {100 - land()}% water · {land()}% land
+          </div>
+
+          <div class="seed-row">
+            <input
+              type="text"
+              class="seed-input"
+              value={seedText()}
+              onInput={(e) => setSeedText(e.currentTarget.value)}
+              placeholder="seed — any words you like"
+              aria-label="World seed"
+            />
+            <button
+              type="button"
+              class="dice-button"
+              onClick={rollSeed}
+              title="Random seed"
+              aria-label="Random seed"
+            >
+              <IconDice size={18} />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            class="grow-button"
+            classList={{ "grow-button-warning": confirmingReplace() }}
+            disabled={!props.ready}
+            onClick={handleStart}
+          >
+            {confirmingReplace()
+              ? "Replace your current world?"
+              : props.savedGame
+                ? "Start a new world"
+                : "Begin growing"}
+          </button>
+
+          <Show when={props.savedGame}>
+            <button
+              type="button"
+              class="menu-back"
+              onClick={() => {
+                setCreating(false);
+                setConfirmingReplace(false);
+                clearTimeout(confirmTimer);
+              }}
+            >
+              ← keep my world
+            </button>
+          </Show>
+        </Show>
       </div>
     </div>
   );
