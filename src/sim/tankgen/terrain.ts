@@ -44,12 +44,14 @@ export function generateTerrain(
   const p = landPercent / 100;
 
   const waterlineY =
-    p >= 1 ? 0 : Math.round(usableHeight * lerp(0.55, 0.08, p));
-  const waterDepth = usableHeight * lerp(0.45, 0.15, p);
+    p >= 1 ? 0 : Math.round(usableHeight * lerp(0.52, 0.1, p));
+  const waterDepth = usableHeight * lerp(0.42, 0.16, p);
   const basinFloor = Math.max(2, Math.round(waterlineY - waterDepth));
+  // land sits only modestly above the waterline — a low bank that reads as
+  // a shore, not a towering cliff over the pond (user: "đất quá cao so với nước")
   const landTop = Math.min(
     usableHeight - 4,
-    Math.round(waterlineY + usableHeight * lerp(0.18, 0.55, p)),
+    Math.round(waterlineY + usableHeight * lerp(0.1, 0.32, p)),
   );
 
   const landOnRight = rng() < 0.5;
