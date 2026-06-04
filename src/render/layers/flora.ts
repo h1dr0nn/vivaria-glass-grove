@@ -693,12 +693,6 @@ function drawTree(
   // whole limb (branch + cloud) sways as ONE unit so leaves stay attached.
   const tierCount = 2 + Math.round(girth * 4); // 2..6 tiers over the years
   const padScale = s * (1.6 + growth * 1.4 + girth * 1.0);
-  interface Pad {
-    cx: number;
-    cy: number;
-    rx: number;
-    ry: number;
-  }
   const lowest = 0.4;
   for (let tier = 0; tier < tierCount; tier++) {
     const ft = tierCount <= 1 ? 1 : tier / (tierCount - 1); // 0 bottom .. 1 apex
@@ -739,52 +733,72 @@ function drawTree(
       g.poly([...top, ...bot]).fill({ color: SCENE.woodDark, alpha: 0.95 });
     }
 
-    // the cloud caps the branch tip, extending OUTWARD (away from trunk)
+    // ONE cohesive cloud caps each branch tip — a lobed blob with a clean
+    // outline, not scattered nuggets. It extends outward over the branch.
     const tierWidth =
-      padScale * (1.5 - ft * 0.5) * (0.85 + rv(tier * 3 + 5) * 0.4) * (0.6 + foliage.fullness * 0.5);
+      padScale * (1.6 - ft * 0.5) * (0.85 + rv(tier * 3 + 5) * 0.4) * (0.55 + foliage.fullness * 0.55);
     const dir = side === 0 ? 0 : Math.sign(side);
-    const pads: Pad[] = [];
-    const blobs = 3 + (tier % 2);
-    for (let b = 0; b < blobs; b++) {
-      const bt = (b / (blobs - 1) - 0.5) * 2;
-      const shimmer = Math.sin(phase * 1.5 + v + tier * 2 + b) * padScale * 0.05;
-      pads.push({
-        cx: tipX + dir * tierWidth * 0.25 + bt * tierWidth * 0.45 + shimmer,
-        cy: tipY - tierWidth * 0.25 - Math.cos(bt * 1.2) * tierWidth * 0.16,
-        rx: tierWidth * (0.42 - Math.abs(bt) * 0.07),
-        ry: tierWidth * 0.3,
-      });
-    }
-    // paint this tier's cloud shadow→body→highlight (kept local so each
-    // cloud reads as its own cohesive puff)
-    for (const p of pads) {
-      g.ellipse(p.cx + p.rx * 0.1, p.cy + p.ry * 0.35, p.rx * 0.95, p.ry * 0.9).fill({
-        color: foliage.shade,
-        alpha: 0.85,
-      });
-    }
-    for (const p of pads) {
-      g.ellipse(p.cx, p.cy, p.rx, p.ry).fill({ color: foliage.base, alpha: 0.97 });
-    }
-    for (const p of pads) {
-      g.ellipse(p.cx - p.rx * 0.18, p.cy - p.ry * 0.3, p.rx * 0.6, p.ry * 0.5).fill({
-        color: foliage.light,
-        alpha: 0.9,
-      });
-    }
+    const cx = tipX + dir * tierWidth * 0.2;
+    const cy = tipY - tierWidth * 0.32;
+    drawCloud(g, cx, cy, tierWidth, foliage, v + tier * 11.3, phase);
+
     // spring blossoms / autumn berries dot the mature canopy
-    if (plants >= 0.85 && v % 3 === 0 && pads.length > 0) {
+    if (plants >= 0.85 && v % 3 === 0) {
       const dotColor = foliage.base === 0xc8893a ? 0xd86a3a : 0xe89bb0;
       for (let k = 0; k < 3; k++) {
-        const p = pads[k % pads.length];
         g.circle(
-          p.cx + Math.sin(v * 7.7 + tier + k * 3.3) * p.rx,
-          p.cy + Math.cos(v * 3.3 + k * 2.1) * p.ry,
+          cx + Math.sin(v * 7.7 + tier + k * 3.3) * tierWidth * 0.4,
+          cy + Math.cos(v * 3.3 + k * 2.1) * tierWidth * 0.22,
           Math.max(0.8, s * 0.24),
         ).fill({ color: dotColor, alpha: 0.95 });
       }
     }
   }
+}
+
+/**
+ * A cohesive cloud-pruned pad — the niwaki look. Built as a UNION of heavily
+ * overlapping circles painted in exactly THREE passes (one fill per tone):
+ *   1) shade: all lobe circles, enlarged + nudged down → one dark under-rim
+ *   2) body:  all lobe circles → overlap auto-merges into ONE bumpy blob
+ *   3) light: a SINGLE big highlight, top-left
+ * The bottoms of the lobes are aligned so the pad has a flat base and sits on
+ * its branch. NEVER shade/highlight per lobe — that is the popcorn bug.
+ */
+function drawCloud(
+  g: Graphics,
+  cx: number,
+  cy: number,
+  width: number,
+  foliage: Foliage,
+  seed: number,
+  phase: number,
+): void {
+  const w = width * 0.5; // half width
+  const h = width * 0.34; // half height — wider than tall (a pad, not a ball)
+  const N = 5;
+  const lobes: { lx: number; ly: number; r: number }[] = [];
+  for (let i = 0; i < N; i++) {
+    const ux = (i / (N - 1) - 0.5) * 2; // -1..1
+    const j = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+    const jitter = j - Math.floor(j) - 0.5; // -0.5..0.5
+    const r = h * (0.98 - 0.16 * ux * ux) * (1 + 0.16 * jitter);
+    const breeze = Math.sin(phase * 1.4 + seed + i) * w * 0.03;
+    const lx = cx + ux * (w - r * 0.7) + breeze;
+    const ly = cy + (h - r); // align bottoms → flat base, bumpy top
+    lobes.push({ lx, ly, r });
+  }
+  // 1) shade rim
+  for (const l of lobes) g.circle(l.lx, l.ly + h * 0.16, l.r * 1.05);
+  g.fill({ color: foliage.shade, alpha: 0.95 });
+  // 2) body — single fill over all overlapping circles = one cohesive blob
+  for (const l of lobes) g.circle(l.lx, l.ly, l.r);
+  g.fill({ color: foliage.base, alpha: 0.98 });
+  // 3) one big highlight on the top-left
+  g.ellipse(cx - w * 0.22, cy - h * 0.4, w * 0.5, h * 0.5).fill({
+    color: foliage.light,
+    alpha: 0.85,
+  });
 }
 
 // ------------------------------------------------------------------ lily
