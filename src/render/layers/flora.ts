@@ -12,10 +12,23 @@ import { screenX, screenY, type TankLayout } from "../layout";
  * growth spreads organically instead of fading in everywhere at once.
  */
 
-const ANCHOR_STREAM = { algae: 10, plants: 11, microbes: 12 } as const;
+const ANCHOR_STREAM = {
+  algae: 10,
+  plants: 11,
+  microbes: 12,
+  tree: 13,
+  lily: 14,
+} as const;
 const MAX_ALGAE_TUFTS = 22;
 const MAX_PLANTS = 16;
 const MICROBE_SPECKS = 36;
+const MAX_LILIES = 8;
+/** the bonsai is the late-game payoff: sapling from 0.5, full tree at 0.85+ */
+const TREE_START = 0.5;
+
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
+}
 
 type PlantKind = "aquatic" | "fern" | "moss";
 
@@ -41,8 +54,10 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
 
   const microbeGfx = new Graphics();
   const algaeGfx = new Graphics();
+  const treeGfx = new Graphics(); // behind small plants — ferns overlap the trunk base
   const plantGfx = new Graphics();
-  container.addChild(microbeGfx, algaeGfx, plantGfx);
+  const lilyGfx = new Graphics(); // floats above everything in the flora layer
+  container.addChild(microbeGfx, algaeGfx, treeGfx, plantGfx, lilyGfx);
 
   const algaeAnchors = pickAnchors(
     tank,
@@ -58,6 +73,14 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
   );
   const speckSeeds = makeSpecks(tank, splitSeed(tank.seed, ANCHOR_STREAM.microbes));
   const wetness = columnWetness(tank);
+  const treeAnchors = pickTreeAnchors(
+    tank,
+    splitSeed(tank.seed, ANCHOR_STREAM.tree),
+  );
+  const lilyAnchors = pickLilyAnchors(
+    tank,
+    splitSeed(tank.seed, ANCHOR_STREAM.lily),
+  );
 
   let lastSim: SimState | null = null;
   let swayPhase = 0;
@@ -66,14 +89,25 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
     lastSim = sim;
     drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, sim, swayPhase);
     drawAlgae(algaeGfx, tank, layout, algaeAnchors, sim.scalars.algae);
+    drawTrees(treeGfx, layout, treeAnchors, sim.scalars.plants, swayPhase);
     drawPlants(plantGfx, layout, plantAnchors, sim.scalars.plants, swayPhase);
+    drawLilies(lilyGfx, tank, layout, lilyAnchors, sim.scalars.algae, swayPhase);
   };
 
   const tick = (timeMs: number): void => {
     swayPhase = timeMs / 1000;
     if (!lastSim) return;
     drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, lastSim, swayPhase);
+    drawTrees(treeGfx, layout, treeAnchors, lastSim.scalars.plants, swayPhase);
     drawPlants(plantGfx, layout, plantAnchors, lastSim.scalars.plants, swayPhase);
+    drawLilies(
+      lilyGfx,
+      tank,
+      layout,
+      lilyAnchors,
+      lastSim.scalars.algae,
+      swayPhase,
+    );
   };
 
   return { container, update, tick };
@@ -467,4 +501,261 @@ function drawSprout(
 function staggeredGrowth(scalar: number, threshold: number): number {
   if (scalar < threshold) return 0;
   return Math.min(1, ((scalar - threshold) / (1 - threshold)) * 1.6);
+}
+
+// ------------------------------------------------------------------ tree
+
+interface TreeAnchor {
+  readonly x: number;
+  readonly y: number;
+  readonly variant: number;
+}
+
+/** 1 (rarely 2) flat, high, dry spots away from the glass — the tree sites. */
+function pickTreeAnchors(tank: TankState, seed: number): TreeAnchor[] {
+  if (tank.landPercent < 25) return [];
+  const rng = mulberry32(seed);
+  const margin = Math.max(4, Math.floor(tank.width * 0.08));
+  const candidates: number[] = [];
+  for (let x = margin; x < tank.width - margin; x++) {
+    const zone = tank.zones[cellIndex(tank.width, x, tank.terrainHeight[x])];
+    if (zone !== ZONE.highland && zone !== ZONE.midland) continue;
+    if (tank.terrainHeight[x] <= tank.waterlineY) continue;
+    let flat = true;
+    for (let d = -2; d <= 2; d++) {
+      const h =
+        tank.terrainHeight[Math.min(tank.width - 1, Math.max(0, x + d))];
+      if (Math.abs(h - tank.terrainHeight[x]) > 1) {
+        flat = false;
+        break;
+      }
+    }
+    if (flat) candidates.push(x);
+  }
+  if (candidates.length === 0) return [];
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  const picked = [candidates[0]];
+  if (tank.landPercent >= 55) {
+    for (const c of candidates.slice(1)) {
+      if (Math.abs(c - picked[0]) > tank.width * 0.22 && rng() < 0.5) {
+        picked.push(c);
+        break;
+      }
+    }
+  }
+  return picked.map((x) => ({
+    x,
+    y: tank.terrainHeight[x],
+    variant: Math.floor(rng() * 1000),
+  }));
+}
+
+function drawTrees(
+  g: Graphics,
+  layout: TankLayout,
+  anchors: readonly TreeAnchor[],
+  plants: number,
+  phase: number,
+): void {
+  g.clear();
+  const growth = clamp01((plants - TREE_START) / (1 - TREE_START));
+  if (growth <= 0) return;
+  for (const anchor of anchors) {
+    drawTree(g, layout, anchor, growth, plants, phase);
+  }
+}
+
+/** S-curve trunk + branches + cloud-pad canopy — the Ghibli centerpiece. */
+function drawTree(
+  g: Graphics,
+  layout: TankLayout,
+  anchor: TreeAnchor,
+  growth: number,
+  plants: number,
+  phase: number,
+): void {
+  const baseX = screenX(layout, anchor.x + 0.5);
+  const baseY = screenY(layout, anchor.y);
+  const v = anchor.variant;
+  const leanSign = v % 2 === 0 ? 1 : -1;
+  const lean = leanSign * (0.5 + (v % 5) * 0.12);
+  const trunkPx = layout.scale * (6 + growth * 24);
+  const trunkWidth = layout.scale * (0.35 + growth * 0.9);
+  const sway = Math.sin(phase * 0.5 + v) * 0.06 * growth;
+
+  const midX = baseX + lean * layout.scale * 0.6;
+  const midY = baseY - trunkPx * 0.5;
+  const topX = baseX - lean * layout.scale * 0.35 + sway * trunkPx;
+  const topY = baseY - trunkPx;
+
+  // trunk: shadowed stroke + thinner lit overlay
+  g.moveTo(baseX, baseY)
+    .quadraticCurveTo(
+      baseX + lean * layout.scale * 0.5,
+      baseY - trunkPx * 0.28,
+      midX,
+      midY,
+    )
+    .quadraticCurveTo(
+      midX - lean * layout.scale * 0.4,
+      midY - trunkPx * 0.28,
+      topX,
+      topY,
+    )
+    .stroke({ color: SCENE.woodDark, width: Math.max(1.4, trunkWidth), alpha: 0.95 });
+  g.moveTo(baseX - trunkWidth * 0.18, baseY)
+    .quadraticCurveTo(
+      baseX + lean * layout.scale * 0.5 - trunkWidth * 0.18,
+      baseY - trunkPx * 0.28,
+      midX - trunkWidth * 0.18,
+      midY,
+    )
+    .quadraticCurveTo(
+      midX - lean * layout.scale * 0.4 - trunkWidth * 0.18,
+      midY - trunkPx * 0.28,
+      topX - trunkWidth * 0.18,
+      topY,
+    )
+    .stroke({ color: SCENE.wood, width: Math.max(1, trunkWidth * 0.55), alpha: 0.9 });
+
+  // branches fan from the upper trunk toward the pad sites
+  const branchCount = 1 + Math.floor(growth * 3);
+  const tips: { x: number; y: number }[] = [{ x: topX, y: topY }];
+  for (let b = 0; b < branchCount; b++) {
+    const t = 0.45 + (b / Math.max(1, branchCount)) * 0.4;
+    const ax = baseX + (topX - baseX) * t;
+    const ay = baseY + (topY - baseY) * t;
+    const dir = (b % 2 === 0 ? 1 : -1) * (0.8 + ((v >> b) & 3) * 0.12);
+    const reach = trunkPx * (0.28 + 0.1 * (b % 2)) * (0.7 + growth * 0.5);
+    const bx = ax + dir * reach;
+    const by = ay - reach * 0.5;
+    g.moveTo(ax, ay)
+      .quadraticCurveTo(ax + dir * reach * 0.5, ay - reach * 0.15, bx, by)
+      .stroke({
+        color: SCENE.woodDark,
+        width: Math.max(1, trunkWidth * 0.5 * (1 - t * 0.4)),
+        alpha: 0.9,
+      });
+    tips.push({ x: bx, y: by });
+  }
+
+  // canopy: overlapping cloud pads, each 3-tone (shadow / body / highlight)
+  const padCount = 2 + Math.floor(growth * 4) + (v % 2);
+  const padScale = layout.scale * (1.4 + growth * 2.2);
+  for (let i = 0; i < padCount; i++) {
+    const tip = tips[i % tips.length];
+    const jx = Math.sin(v * 12.9898 + i * 7.13) * padScale * 0.6;
+    const jy = Math.cos(v * 4.1414 + i * 5.27) * padScale * 0.35;
+    const cx = tip.x + jx + sway * padScale * 0.4;
+    const cy = tip.y + jy - padScale * 0.2;
+    const rx = padScale * (0.9 + (i % 3) * 0.12);
+    const ry = rx * 0.72;
+    g.ellipse(cx + rx * 0.1, cy + ry * 0.3, rx * 0.92, ry * 0.85).fill({
+      color: SCENE.algaeDeep,
+      alpha: 0.85,
+    });
+    g.ellipse(cx, cy, rx, ry).fill({ color: SCENE.leaf, alpha: 0.96 });
+    g.ellipse(cx - rx * 0.16, cy - ry * 0.28, rx * 0.62, ry * 0.55).fill({
+      color: SCENE.leafLight,
+      alpha: 0.9,
+    });
+  }
+
+  // blossoms only at full maturity, only on some trees
+  if (plants >= 0.85 && v % 3 === 0) {
+    const blossoms = 3 + Math.floor(((plants - 0.85) / 0.15) * 6);
+    for (let k = 0; k < blossoms; k++) {
+      const tip = tips[k % tips.length];
+      g.circle(
+        tip.x + Math.sin(v * 7.7 + k * 3.3) * padScale * 0.7,
+        tip.y + Math.cos(v * 3.3 + k * 2.1) * padScale * 0.5 - padScale * 0.2,
+        Math.max(0.8, layout.scale * 0.26),
+      ).fill({ color: 0xe89bb0, alpha: 0.95 });
+    }
+  }
+}
+
+// ------------------------------------------------------------------ lily
+
+interface LilyAnchor {
+  readonly x: number;
+  readonly threshold: number;
+  readonly variant: number;
+}
+
+/** floating pads live over DEEP water only — never near the bank */
+function pickLilyAnchors(tank: TankState, seed: number): LilyAnchor[] {
+  if (tank.waterlineY <= 3) return [];
+  const rng = mulberry32(seed);
+  const candidates: number[] = [];
+  for (let x = 3; x < tank.width - 3; x++) {
+    if (tank.terrainHeight[x] >= tank.waterlineY - 3) continue;
+    candidates.push(x);
+  }
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  return candidates.slice(0, MAX_LILIES).map((x, i) => ({
+    x: x + rng() * 0.6,
+    threshold: 0.5 + (i / MAX_LILIES) * 0.3,
+    variant: Math.floor(rng() * 1000),
+  }));
+}
+
+/** "bèo" — pads riding the live water surface, drifting and bobbing */
+function drawLilies(
+  g: Graphics,
+  tank: TankState,
+  layout: TankLayout,
+  anchors: readonly LilyAnchor[],
+  algae: number,
+  phase: number,
+): void {
+  g.clear();
+  if (algae < 0.5 || tank.waterlineY <= 3) return;
+  for (const anchor of anchors) {
+    const growth = clamp01(
+      ((algae - anchor.threshold) / (1 - anchor.threshold)) * 1.4,
+    );
+    if (growth <= 0) continue;
+    // hard guard: never render over land, whatever the terrain does
+    const column = Math.min(
+      tank.width - 1,
+      Math.max(0, Math.round(anchor.x)),
+    );
+    if (tank.terrainHeight[column] >= tank.waterlineY - 1) continue;
+
+    const drift = Math.sin(phase * 0.35 + anchor.variant) * 0.5;
+    const bob = Math.sin(phase * 0.7 + anchor.variant * 1.7) * 0.12;
+    const cx = screenX(layout, anchor.x + 0.5 + drift);
+    const cy = screenY(layout, tank.waterlineY + bob);
+    const r =
+      layout.scale * (1 + growth * 1.6) * (0.8 + (anchor.variant % 4) * 0.1);
+    const ry = r * 0.42;
+    // soft shadow on the water under the pad
+    g.ellipse(cx + r * 0.08, cy + ry * 0.5, r * 0.95, ry * 0.7).fill({
+      color: SCENE.waterDeep,
+      alpha: 0.18,
+    });
+    // pad with a seeded V-notch
+    const notch = anchor.variant % 2 === 0 ? 0.18 : -0.18;
+    g.ellipse(cx, cy, r, ry).fill({ color: SCENE.algae, alpha: 0.95 });
+    g.poly([
+      cx + notch * r, cy - ry,
+      cx + notch * r * 1.6, cy,
+      cx + notch * r, cy + ry,
+    ]).fill({ color: SCENE.waterSurface, alpha: 0.9 });
+    g.circle(cx, cy, Math.max(0.6, r * 0.1)).fill({
+      color: SCENE.algaeDeep,
+      alpha: 0.7,
+    });
+    g.ellipse(cx - r * 0.1, cy - ry * 0.25, r * 0.7, ry * 0.5).fill({
+      color: SCENE.leafLight,
+      alpha: 0.35,
+    });
+  }
 }

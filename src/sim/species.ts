@@ -19,7 +19,8 @@ export type Movement =
   | "hop"
   | "scuttle"
   | "wiggle"
-  | "fly";
+  | "fly"
+  | "amble";
 
 export interface SpeciesDef {
   readonly id: string;
@@ -177,6 +178,21 @@ export const SPECIES: readonly SpeciesDef[] = [
     color: 0x7da95c,
     accent: 0x5c8a44,
     movement: "hop",
+  },
+  {
+    id: "pond-turtle",
+    name: "Pond turtle",
+    blurb: "An unhurried elder, basking wherever the light is kind.",
+    tier: "plants",
+    threshold: 0.6,
+    minLand: 25,
+    maxLand: 80,
+    habitat: "land",
+    maxCount: 1,
+    size: 3.2,
+    color: 0x6b8456,
+    accent: 0x4f6342,
+    movement: "amble",
   },
   // ----------------------------------------------------------- land
   {

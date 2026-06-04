@@ -89,7 +89,7 @@ export default function App() {
     const frame = (now: number): void => {
       settleRaf = undefined;
       if (!view || document.visibilityState !== "visible") return;
-      view.tick(now);
+      view.tickAmbient(now);
       markDirty();
       if (view.isSloshing()) {
         settleRaf = requestAnimationFrame(frame);
@@ -105,6 +105,29 @@ export default function App() {
     }
   };
 
+  // creatures are ALIVE: a continuous display-rate loop, but ONLY while
+  // visible and playing — hidden/minimized cancels it (idle-CPU contract).
+  // Transform-only updates keep each frame to a few hundred float writes.
+  let creatureRaf: number | undefined;
+  const startCreatureLoop = (): void => {
+    if (creatureRaf !== undefined) return;
+    const frame = (now: number): void => {
+      creatureRaf = undefined;
+      if (!view || document.visibilityState !== "visible") return;
+      view.tickCreatures(now);
+      markDirty();
+      creatureRaf = requestAnimationFrame(frame);
+    };
+    creatureRaf = requestAnimationFrame(frame);
+  };
+
+  const stopCreatureLoop = (): void => {
+    if (creatureRaf !== undefined) {
+      cancelAnimationFrame(creatureRaf);
+      creatureRaf = undefined;
+    }
+  };
+
   // ambient + autosave timers exist ONLY while playing AND visible —
   // a hidden window must cost zero timer wakeups (idle-CPU contract).
   // NOTE: the OS reduced-motion flag is deliberately ignored — it silently
@@ -114,11 +137,12 @@ export default function App() {
     clearInterval(ambientInterval);
     ambientInterval = setInterval(() => {
       if (!view) return;
-      view.tick(performance.now());
+      view.tickAmbient(performance.now());
       markDirty();
     }, AMBIENT_STEP_MS);
     clearInterval(autosaveInterval);
     autosaveInterval = setInterval(() => void persist(), AUTOSAVE_MS);
+    startCreatureLoop();
   };
 
   const stopTickers = (): void => {
@@ -126,6 +150,7 @@ export default function App() {
     clearInterval(autosaveInterval);
     ambientInterval = undefined;
     autosaveInterval = undefined;
+    stopCreatureLoop();
   };
 
   const onVisibilityTickers = (): void => {

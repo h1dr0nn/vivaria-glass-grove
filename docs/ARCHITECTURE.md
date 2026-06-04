@@ -1,4 +1,4 @@
-# Architecture — RCT Terarium
+# Architecture — Vivaria - Glass Grove
 
 > Decisions locked 2026-06-04 after multi-agent research + red-team review.
 > This file is the build contract. Deviations require a written reason here.
@@ -77,7 +77,13 @@ seed + landPercent
 ## Rendering rules (idle CPU is a feature)
 
 - `app.ticker.autoStart = false`. Manual `app.render()` gated on a **dirty flag**.
-  A still-but-visible tank must render **<5 frames/sec**. Minimized = 0.
+- TWO visibility-gated motion sources (amended 2026-06-04 for 60fps creatures):
+  (a) an 80ms ambient ticker for water/flora redraws; (b) a creature rAF at
+  display refresh, transform-only (zero re-tessellation), ONLY while visible
+  AND playing — creatures are alive, a visible tank is intentionally never
+  frozen. A visible tank with NO active fauna still renders <5 fps.
+  **HARD guarantee: hidden/minimized = 0 frames, 0 timers, 0 rAF** — every
+  loop (ambient, creature, slosh-settle) cancels on visibilitychange.
 - Page Visibility API + Tauri focus/minimize events = master switch.
   On resume: single clamped catch-up pass, then re-enable motion.
 - Max **2** full-screen filters. v1 ships ONE ColorMatrixFilter (warm grade). Bloom later,

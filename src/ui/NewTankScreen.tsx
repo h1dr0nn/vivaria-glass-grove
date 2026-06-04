@@ -83,8 +83,8 @@ export default function NewTankScreen(props: NewTankScreenProps) {
     <div class="menu-screen">
       <div class="menu-panel">
         <header class="menu-header">
-          <h1 class="menu-title">Terarium</h1>
-          <p class="menu-subtitle">grow a tiny world from nothing</p>
+          <h1 class="menu-title">Vivaria</h1>
+          <p class="menu-subtitle">Glass Grove · grow a tiny world from nothing</p>
         </header>
 
         <Show when={props.savedGame}>

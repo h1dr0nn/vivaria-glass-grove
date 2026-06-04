@@ -18,7 +18,7 @@ let dropletTimer: ReturnType<typeof setTimeout> | undefined;
 let muted = false;
 
 const MASTER_VOLUME = 0.16;
-const MUTE_KEY = "terarium-muted";
+const MUTE_KEY = "vivaria-muted";
 
 function ensureContext(): AudioContext | null {
   if (ctx) return ctx;

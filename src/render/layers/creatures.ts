@@ -5,32 +5,55 @@ import type { TankState } from "../../sim/tankgen";
 import { screenX, screenY, type TankLayout } from "../layout";
 
 /**
- * Creatures, drawn from the deterministic population. Counts come from the
- * sim; positions/motion are cosmetic, seeded per species, and advance only
- * in the visible-gated ambient tick. The layer never touches sim state.
+ * Creatures, drawn from the deterministic population.
+ *
+ * PERFORMANCE CONTRACT: each creature is built ONCE as a small Container of
+ * sub-part Graphics; the per-frame path touches ONLY transforms (position /
+ * rotation / scale flips and joint rotations) — zero re-tessellation — so a
+ * 60fps creature loop costs a few hundred float writes. Counts come from the
+ * sim; motion is cosmetic, seeded, and bounded. The layer never mutates sim.
  */
 
 const SPAWN_STREAM_BASE = 40;
+/** smoothing rate for the render-position lerp (higher = snappier) */
+const SMOOTH_RATE = 12;
 
 interface ColumnRange {
   readonly start: number;
   readonly end: number;
 }
 
+interface CreatureParts {
+  readonly tail?: Graphics;
+  readonly wingLeft?: Graphics;
+  readonly wingRight?: Graphics;
+  readonly claw?: Graphics;
+  readonly head?: Graphics;
+  readonly legs?: readonly Graphics[];
+  /** worm-style parts that must redraw each frame (kept tiny) */
+  readonly redraw?: Graphics;
+}
+
 interface Creature {
   readonly def: SpeciesDef;
+  readonly container: Container;
+  readonly parts: CreatureParts;
   x: number;
   y: number;
+  renderX: number;
+  renderY: number;
   dir: number;
   phase: number;
   speed: number;
-  /** hop/burst progress */
   action: number;
+  /** generic per-species extra state (turtle mode, shrimp flick) */
+  extra: number;
 }
 
 export interface CreatureLayer {
   readonly container: Container;
   update(population: readonly PopulationEntry[]): void;
+  /** transform-only animation frame — called from the creature rAF loop */
   tick(timeMs: number): void;
 }
 
@@ -38,54 +61,53 @@ export function buildCreatures(
   tank: TankState,
   layout: TankLayout,
 ): CreatureLayer {
-  const container = new Container();
-  const gfx = new Graphics();
-  container.addChild(gfx);
-
+  const root = new Container();
   const ranges = computeRanges(tank);
-  const creatures = new Map<string, Creature[]>();
+  const flocks = new Map<string, Creature[]>();
   let lastTimeMs = 0;
 
   const update = (population: readonly PopulationEntry[]): void => {
     const seen = new Set<string>();
     for (const entry of population) {
       seen.add(entry.def.id);
-      const flock = creatures.get(entry.def.id) ?? [];
+      const flock = flocks.get(entry.def.id) ?? [];
       while (flock.length < entry.count) {
-        const spawned = spawn(tank, ranges, entry.def, flock.length);
-        if (!spawned) break;
-        flock.push(spawned);
+        const creature = spawn(tank, layout, ranges, entry.def, flock.length);
+        if (!creature) break;
+        root.addChild(creature.container);
+        flock.push(creature);
       }
-      if (flock.length > entry.count) flock.length = entry.count;
-      creatures.set(entry.def.id, flock);
+      while (flock.length > entry.count) {
+        const removed = flock.pop();
+        removed?.container.destroy({ children: true });
+      }
+      flocks.set(entry.def.id, flock);
     }
-    for (const id of creatures.keys()) {
-      if (!seen.has(id)) creatures.delete(id);
+    for (const [id, flock] of flocks) {
+      if (seen.has(id)) continue;
+      for (const creature of flock) {
+        creature.container.destroy({ children: true });
+      }
+      flocks.delete(id);
     }
-    draw();
   };
 
   const tick = (timeMs: number): void => {
-    const dt = lastTimeMs === 0 ? 0.08 : Math.min(0.25, (timeMs - lastTimeMs) / 1000);
+    const dt =
+      lastTimeMs === 0
+        ? 0.016
+        : Math.min(0.05, Math.max(0, (timeMs - lastTimeMs) / 1000));
     lastTimeMs = timeMs;
-    for (const flock of creatures.values()) {
+    const time = timeMs / 1000;
+    for (const flock of flocks.values()) {
       for (const creature of flock) {
-        move(creature, tank, ranges, dt, timeMs / 1000);
-      }
-    }
-    draw();
-  };
-
-  const draw = (): void => {
-    gfx.clear();
-    for (const flock of creatures.values()) {
-      for (const creature of flock) {
-        drawCreature(gfx, layout, creature);
+        move(creature, tank, ranges, dt, time);
+        animate(creature, layout, dt, time);
       }
     }
   };
 
-  return { container, update, tick };
+  return { container: root, update, tick };
 }
 
 // ------------------------------------------------------------- habitats
@@ -169,6 +191,7 @@ function clampColumn(tank: TankState, x: number): number {
 
 function spawn(
   tank: TankState,
+  layout: TankLayout,
   ranges: Ranges,
   def: SpeciesDef,
   index: number,
@@ -179,14 +202,21 @@ function spawn(
     splitSeed(tank.seed, SPAWN_STREAM_BASE + hashId(def.id)) + index,
   );
   const x = range.start + 2 + rng() * (range.end - range.start - 4);
+  const y = homeY(def, tank, x);
+  const { container, parts } = buildBody(def, layout);
   return {
     def,
+    container,
+    parts,
     x,
-    y: homeY(def, tank, x),
+    y,
+    renderX: x,
+    renderY: y,
     dir: rng() < 0.5 ? -1 : 1,
     phase: rng() * Math.PI * 2,
     speed: 0.6 + rng() * 0.8,
     action: rng(),
+    extra: 0,
   };
 }
 
@@ -210,6 +240,9 @@ function move(
   const range = rangeFor(c.def, ranges);
   if (!range) return;
   const margin = 2;
+  const clampX = (): void => {
+    c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
+  };
 
   switch (c.def.movement) {
     case "drift": {
@@ -219,7 +252,6 @@ function move(
       break;
     }
     case "school": {
-      // the school shares a slow wandering center; members orbit it
       const center =
         range.start +
         margin +
@@ -227,7 +259,7 @@ function move(
           (range.end - range.start - margin * 2);
       const targetX = center + Math.sin(c.phase * 5) * 6;
       const dx = targetX - c.x;
-      c.dir = Math.abs(dx) < 0.3 ? c.dir : Math.sign(dx);
+      if (Math.abs(dx) > 0.3) c.dir = Math.sign(dx);
       c.x += dx * dt * 0.7;
       c.y += Math.sin(time * 0.9 + c.phase * 3) * dt * 1.4;
       confineWater(c, tank);
@@ -235,26 +267,13 @@ function move(
     }
     case "crawl": {
       c.x += c.dir * c.speed * dt * 0.7;
-      if (c.x < range.start + margin || c.x > range.end - margin) {
-        c.dir *= -1;
-        c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
-      }
+      if (c.x < range.start + margin || c.x > range.end - margin) c.dir *= -1;
+      clampX();
       c.y = homeY(c.def, tank, c.x);
       break;
     }
     case "scuttle": {
-      c.action -= dt;
-      if (c.action <= 0) {
-        c.action = 1.2 + Math.sin(c.phase + time) * 0.8 + 1;
-        // deterministic flip — seeded phase folded with the burst time
-        c.dir = Math.sin(c.phase * 13.7 + time * 3.1) < 0 ? -1 : 1;
-      }
-      if (c.action > 1) {
-        c.x += c.dir * c.speed * dt * 3.2;
-        if (c.x < range.start + margin || c.x > range.end - margin) c.dir *= -1;
-        c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
-      }
-      c.y = homeY(c.def, tank, c.x);
+      moveScuttle(c, tank, range, margin, dt, time);
       break;
     }
     case "hop": {
@@ -265,11 +284,10 @@ function move(
       }
       const ground = homeY(c.def, tank, c.x);
       if (c.action <= 0) {
-        // mid-hop: parabolic arc over 0.45s
         const t = -c.action / 0.45;
         c.x += c.dir * c.speed * dt * 5;
         if (c.x < range.start + margin || c.x > range.end - margin) c.dir *= -1;
-        c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
+        clampX();
         c.y = ground + Math.sin(t * Math.PI) * 1.6;
       } else {
         c.y = ground;
@@ -284,15 +302,98 @@ function move(
       c.x += Math.sin(time * 0.5 + c.phase) * dt * 4;
       const ground = homeY(c.def, tank, c.x);
       c.y = ground + 2 + Math.sin(time * 0.8 + c.phase * 2) * 2;
-      if (c.x < range.start + margin || c.x > range.end - margin) {
-        c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
-      }
+      clampX();
       c.dir = Math.cos(time * 0.5 + c.phase) >= 0 ? 1 : -1;
+      break;
+    }
+    case "amble": {
+      moveAmble(c, tank, range, margin, dt, time);
       break;
     }
     default:
       break;
   }
+}
+
+/** forage bursts; cherry shrimp add the real backward tail-flick escape */
+function moveScuttle(
+  c: Creature,
+  tank: TankState,
+  range: ColumnRange,
+  margin: number,
+  dt: number,
+  time: number,
+): void {
+  const isShrimp = c.def.id === "cherry-shrimp";
+
+  // extra < 0 ⇒ mid-flick (extra counts up to 0); extra > 0 ⇒ time to next
+  if (isShrimp) {
+    if (c.extra <= 0 && c.extra > -1) {
+      // schedule the first/next flick 6–14s out (seeded by phase)
+      if (c.extra === 0) c.extra = 6 + ((c.phase * 977) % 8);
+    }
+    if (c.extra < 0) {
+      // mid-flick: quick backward arc, ~0.3s
+      const progress = 1 + c.extra / 0.3; // 0→1
+      c.x -= c.dir * c.speed * dt * 14;
+      if (c.x < range.start + margin || c.x > range.end - margin) {
+        c.dir *= -1;
+      }
+      c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
+      c.y = homeY(c.def, tank, c.x) + Math.sin(progress * Math.PI) * 0.8;
+      c.extra += dt;
+      if (c.extra >= 0) c.extra = 6 + ((c.phase * 977) % 8);
+      return;
+    }
+    c.extra -= dt;
+    if (c.extra <= 0) {
+      c.extra = -0.3; // begin flick
+      return;
+    }
+  }
+
+  c.action -= dt;
+  if (c.action <= 0) {
+    c.action = 1.2 + Math.sin(c.phase + time) * 0.8 + 1;
+    c.dir = Math.sin(c.phase * 13.7 + time * 3.1) < 0 ? -1 : 1;
+  }
+  if (c.action > 1) {
+    c.x += c.dir * c.speed * dt * 3.2;
+    if (c.x < range.start + margin || c.x > range.end - margin) c.dir *= -1;
+    c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
+  }
+  c.y = homeY(c.def, tank, c.x);
+}
+
+/** turtle: long unhurried walks, longer pauses, occasional basking */
+function moveAmble(
+  c: Creature,
+  tank: TankState,
+  range: ColumnRange,
+  margin: number,
+  dt: number,
+  time: number,
+): void {
+  c.action -= dt;
+  if (c.action <= 0) {
+    // cycle mode: 0 walk → 1 pause → (sometimes) 2 bask → walk…
+    const mode = c.extra;
+    if (mode === 0) {
+      const basks = Math.sin(c.phase * 31 + time) > 0.3;
+      c.extra = basks ? 2 : 1;
+      c.action = basks ? 5 + ((c.phase * 613) % 4) : 2 + ((c.phase * 401) % 3);
+    } else {
+      c.extra = 0;
+      c.action = 3 + ((c.phase * 769) % 4);
+      c.dir = Math.sin(c.phase * 7.3 + time * 0.9) < 0 ? -1 : 1;
+    }
+  }
+  if (c.extra === 0) {
+    c.x += c.dir * c.speed * dt * 0.35;
+    if (c.x < range.start + margin || c.x > range.end - margin) c.dir *= -1;
+    c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
+  }
+  c.y = homeY(c.def, tank, c.x);
 }
 
 function confineWater(c: Creature, tank: TankState): void {
@@ -303,231 +404,366 @@ function confineWater(c: Creature, tank: TankState): void {
   if (c.y > ceiling) c.y = ceiling;
 }
 
-// ---------------------------------------------------------------- draw
+// ----------------------------------------------------------- animation
 
-function drawCreature(g: Graphics, layout: TankLayout, c: Creature): void {
-  const px = screenX(layout, c.x);
-  const py = screenY(layout, c.y);
-  const s = layout.scale * c.def.size;
-  const { color, accent } = c.def;
+/** transform-only per-frame pass — positions, flips, joint rotations */
+function animate(
+  c: Creature,
+  layout: TankLayout,
+  dt: number,
+  time: number,
+): void {
+  const k = Math.min(1, dt * SMOOTH_RATE);
+  c.renderX += (c.x - c.renderX) * k;
+  c.renderY += (c.y - c.renderY) * k;
+  c.container.position.set(
+    screenX(layout, c.renderX),
+    screenY(layout, c.renderY),
+  );
+  c.container.scale.x = c.dir;
 
+  const { parts } = c;
   switch (c.def.id) {
     case "ember-tetra":
+    case "dwarf-cory": {
+      if (parts.tail) {
+        parts.tail.rotation = Math.sin(time * 8 + c.phase) * 0.35;
+      }
+      c.container.rotation = Math.sin(time * 1.2 + c.phase) * 0.05;
+      break;
+    }
+    case "cherry-shrimp": {
+      const flicking = c.extra < 0;
+      if (parts.tail) {
+        parts.tail.rotation = flicking
+          ? -1.1 * Math.sin((1 + c.extra / 0.3) * Math.PI)
+          : Math.sin(time * 6 + c.phase) * 0.15;
+      }
+      c.container.rotation = flicking ? -0.25 * c.dir : 0;
+      break;
+    }
+    case "meadow-moth": {
+      const flap = 0.35 + Math.abs(Math.sin(time * 11 + c.phase)) * 0.75;
+      if (parts.wingLeft) parts.wingLeft.scale.y = flap;
+      if (parts.wingRight) parts.wingRight.scale.y = flap;
+      break;
+    }
+    case "fiddler-crab": {
+      if (parts.claw) {
+        parts.claw.rotation = -0.3 + Math.sin(time * 2.1 + c.phase) * 0.3;
+      }
+      break;
+    }
+    case "pond-turtle": {
+      const walking = c.extra === 0;
+      const basking = c.extra === 2;
+      if (parts.legs) {
+        for (const [i, leg] of parts.legs.entries()) {
+          leg.rotation = walking
+            ? Math.sin(time * 4 + c.phase + i * Math.PI) * 0.35
+            : 0;
+        }
+      }
+      if (parts.head) {
+        parts.head.rotation = basking
+          ? -0.35
+          : Math.sin(time * 1.6 + c.phase) * 0.08;
+        parts.head.position.x = basking
+          ? parts.head.position.x
+          : parts.head.position.x;
+      }
+      break;
+    }
+    case "froglet": {
+      // a gentle throat bob while resting
+      c.container.rotation =
+        c.action > 0 ? Math.sin(time * 3 + c.phase) * 0.02 : -0.08 * c.dir;
+      break;
+    }
+    case "detritus-worm": {
+      if (parts.redraw) {
+        const g = parts.redraw;
+        const s = layout.scale * c.def.size;
+        g.clear();
+        g.moveTo(-s * 0.5, 0);
+        for (let i = 1; i <= 4; i++) {
+          g.lineTo(
+            -s * 0.5 + (i / 4) * s,
+            Math.sin(time * 2 + c.phase + i) * s * 0.18,
+          );
+        }
+        g.stroke({
+          color: c.def.color,
+          width: Math.max(0.8, s * 0.18),
+          alpha: 0.85,
+        });
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// ----------------------------------------------------- one-time builders
+
+function buildBody(
+  def: SpeciesDef,
+  layout: TankLayout,
+): { container: Container; parts: CreatureParts } {
+  const container = new Container();
+  const s = layout.scale * def.size;
+  let parts: CreatureParts = {};
+
+  switch (def.id) {
+    case "ember-tetra":
     case "dwarf-cory":
-      drawFish(g, px, py, s, c.dir, color, accent);
+      parts = buildFish(container, s, def.color, def.accent);
       break;
     case "cherry-shrimp":
-      drawShrimp(g, px, py, s, c.dir, color, accent);
+      parts = buildShrimp(container, s, def.color, def.accent);
       break;
     case "ramshorn-snail":
     case "moss-snail":
-      drawSnail(g, px, py, s, c.dir, color, accent);
+      parts = buildSnail(container, s, def.color, def.accent);
       break;
     case "fiddler-crab":
-      drawCrab(g, px, py, s, c.dir, color, accent);
+      parts = buildCrab(container, s, def.color, def.accent);
       break;
     case "froglet":
-      drawFrog(g, px, py, s, c.dir, color, accent);
+      parts = buildFrog(container, s, def.color, def.accent);
       break;
     case "dwarf-isopod":
     case "leaf-beetle":
-      drawBug(g, px, py, s, color, accent);
+      parts = buildBug(container, s, def.color, def.accent);
       break;
     case "meadow-moth":
-      drawMoth(g, px, py, s, c.phase, color, accent);
+      parts = buildMoth(container, s, def.color, def.accent);
       break;
-    case "detritus-worm":
-      drawWorm(g, px, py, s, c.phase, color);
+    case "detritus-worm": {
+      const redraw = new Graphics();
+      container.addChild(redraw);
+      parts = { redraw };
       break;
-    default:
-      g.circle(px, py, Math.max(1, s * 0.5)).fill({ color, alpha: 0.9 });
+    }
+    case "pond-turtle":
+      parts = buildTurtle(container, s, def.color, def.accent);
       break;
+    default: {
+      const dot = new Graphics();
+      dot.circle(0, 0, Math.max(1, s * 0.5)).fill({
+        color: def.color,
+        alpha: 0.9,
+      });
+      container.addChild(dot);
+      break;
+    }
   }
+  return { container, parts };
 }
 
-function drawFish(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildFish(
+  container: Container,
   s: number,
-  dir: number,
   color: number,
   accent: number,
-): void {
-  g.ellipse(x, y, s * 0.9, s * 0.45).fill({ color, alpha: 0.95 });
-  // tail
-  g.poly([
-    x - dir * s * 0.8,
-    y,
-    x - dir * s * 1.35,
-    y - s * 0.4,
-    x - dir * s * 1.35,
-    y + s * 0.4,
-  ]).fill({ color: accent, alpha: 0.9 });
-  // eye
-  g.circle(x + dir * s * 0.45, y - s * 0.08, Math.max(0.7, s * 0.1)).fill({
+): CreatureParts {
+  const tail = new Graphics();
+  tail
+    .poly([0, 0, -s * 0.55, -s * 0.4, -s * 0.55, s * 0.4])
+    .fill({ color: accent, alpha: 0.9 });
+  tail.position.set(-s * 0.8, 0); // pivot at the body-tail joint
+  const body = new Graphics();
+  body.ellipse(0, 0, s * 0.9, s * 0.45).fill({ color, alpha: 0.95 });
+  body.circle(s * 0.45, -s * 0.08, Math.max(0.7, s * 0.1)).fill({
     color: 0x2b2823,
     alpha: 0.9,
   });
+  container.addChild(tail, body);
+  return { tail };
 }
 
-function drawShrimp(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildShrimp(
+  container: Container,
   s: number,
-  dir: number,
   color: number,
   accent: number,
-): void {
-  // arched body of segments
+): CreatureParts {
+  const body = new Graphics();
   for (let i = 0; i < 4; i++) {
     const t = i / 3;
-    g.circle(
-      x - dir * (t - 0.4) * s * 1.2,
-      y - Math.sin(t * Math.PI) * s * 0.35,
-      s * (0.32 - t * 0.06),
-    ).fill({ color: i % 2 === 0 ? color : accent, alpha: 0.95 });
+    body
+      .circle(-(t - 0.4) * s * 1.2, -Math.sin(t * Math.PI) * s * 0.35, s * (0.32 - t * 0.06))
+      .fill({ color: i % 2 === 0 ? color : accent, alpha: 0.95 });
   }
-  // tail fan
-  g.circle(x - dir * s * 0.85, y + s * 0.05, s * 0.18).fill({
-    color: accent,
-    alpha: 0.9,
-  });
+  const tail = new Graphics();
+  tail.circle(0, 0, s * 0.18).fill({ color: accent, alpha: 0.9 });
+  tail.position.set(-s * 0.85, s * 0.05);
+  container.addChild(body, tail);
+  return { tail };
 }
 
-function drawSnail(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildSnail(
+  container: Container,
   s: number,
-  dir: number,
   color: number,
   accent: number,
-): void {
-  // foot
-  g.ellipse(x, y - s * 0.12, s * 0.75, s * 0.22).fill({
+): CreatureParts {
+  const body = new Graphics();
+  body.ellipse(0, -s * 0.12, s * 0.75, s * 0.22).fill({
     color: accent,
     alpha: 0.9,
   });
-  // shell
-  g.circle(x - dir * s * 0.15, y - s * 0.55, s * 0.45).fill({
-    color,
-    alpha: 0.95,
-  });
-  g.circle(x - dir * s * 0.15, y - s * 0.55, s * 0.22).stroke({
+  body.circle(-s * 0.15, -s * 0.55, s * 0.45).fill({ color, alpha: 0.95 });
+  body.circle(-s * 0.15, -s * 0.55, s * 0.22).stroke({
     color: accent,
     width: Math.max(0.8, s * 0.1),
     alpha: 0.7,
   });
+  container.addChild(body);
+  return {};
 }
 
-function drawCrab(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildCrab(
+  container: Container,
   s: number,
-  dir: number,
   color: number,
   accent: number,
-): void {
-  g.ellipse(x, y - s * 0.3, s * 0.6, s * 0.4).fill({ color, alpha: 0.95 });
-  // legs
+): CreatureParts {
+  const body = new Graphics();
+  body.ellipse(0, -s * 0.3, s * 0.6, s * 0.4).fill({ color, alpha: 0.95 });
   for (const side of [-1, 1]) {
     for (let i = 0; i < 3; i++) {
-      const lx = x + side * s * (0.5 + i * 0.16);
-      g.moveTo(x + side * s * 0.4, y - s * 0.25)
-        .lineTo(lx, y + s * 0.05)
-        .stroke({ color: accent, width: Math.max(0.8, s * 0.08), alpha: 0.85 });
+      body
+        .moveTo(side * s * 0.4, -s * 0.25)
+        .lineTo(side * s * (0.5 + i * 0.16), s * 0.05)
+        .stroke({
+          color: accent,
+          width: Math.max(0.8, s * 0.08),
+          alpha: 0.85,
+        });
     }
   }
-  // the famous big claw
-  g.circle(x + dir * s * 0.75, y - s * 0.5, s * 0.3).fill({
-    color: accent,
-    alpha: 0.95,
-  });
-  // eye stalks
-  g.circle(x - s * 0.15, y - s * 0.72, s * 0.08).fill({ color: 0x2b2823 });
-  g.circle(x + s * 0.15, y - s * 0.72, s * 0.08).fill({ color: 0x2b2823 });
+  body.circle(-s * 0.15, -s * 0.72, s * 0.08).fill({ color: 0x2b2823 });
+  body.circle(s * 0.15, -s * 0.72, s * 0.08).fill({ color: 0x2b2823 });
+  const claw = new Graphics();
+  claw.circle(s * 0.25, 0, s * 0.3).fill({ color: accent, alpha: 0.95 });
+  claw.position.set(s * 0.5, -s * 0.5); // pivot at the shoulder
+  container.addChild(body, claw);
+  return { claw };
 }
 
-function drawFrog(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildFrog(
+  container: Container,
   s: number,
-  dir: number,
   color: number,
   accent: number,
-): void {
-  // haunches + body lean in travel direction
-  g.ellipse(x - dir * s * 0.2, y - s * 0.25, s * 0.42, s * 0.35).fill({
+): CreatureParts {
+  const body = new Graphics();
+  body.ellipse(-s * 0.2, -s * 0.25, s * 0.42, s * 0.35).fill({
     color: accent,
     alpha: 0.95,
   });
-  g.ellipse(x + dir * s * 0.15, y - s * 0.4, s * 0.45, s * 0.3).fill({
+  body.ellipse(s * 0.15, -s * 0.4, s * 0.45, s * 0.3).fill({
     color,
     alpha: 0.95,
   });
-  // eye bump
-  g.circle(x + dir * s * 0.45, y - s * 0.62, s * 0.12).fill({ color });
-  g.circle(x + dir * s * 0.48, y - s * 0.64, s * 0.05).fill({
-    color: 0x2b2823,
-  });
-  // front leg
-  g.moveTo(x + dir * s * 0.35, y - s * 0.15)
-    .lineTo(x + dir * s * 0.45, y)
+  body.circle(s * 0.45, -s * 0.62, s * 0.12).fill({ color });
+  body.circle(s * 0.48, -s * 0.64, s * 0.05).fill({ color: 0x2b2823 });
+  body
+    .moveTo(s * 0.35, -s * 0.15)
+    .lineTo(s * 0.45, 0)
     .stroke({ color: accent, width: Math.max(0.8, s * 0.1), alpha: 0.9 });
+  container.addChild(body);
+  return {};
 }
 
-function drawBug(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildBug(
+  container: Container,
   s: number,
   color: number,
   accent: number,
-): void {
-  g.ellipse(x, y - s * 0.2, s * 0.5, s * 0.3).fill({ color, alpha: 0.95 });
-  g.moveTo(x - s * 0.45, y - s * 0.2)
-    .lineTo(x + s * 0.45, y - s * 0.2)
+): CreatureParts {
+  const body = new Graphics();
+  body.ellipse(0, -s * 0.2, s * 0.5, s * 0.3).fill({ color, alpha: 0.95 });
+  body
+    .moveTo(-s * 0.45, -s * 0.2)
+    .lineTo(s * 0.45, -s * 0.2)
     .stroke({ color: accent, width: Math.max(0.6, s * 0.06), alpha: 0.6 });
+  container.addChild(body);
+  return {};
 }
 
-function drawMoth(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildMoth(
+  container: Container,
   s: number,
-  phase: number,
   color: number,
   accent: number,
-): void {
-  const flap = Math.abs(Math.sin(performance.now() / 90 + phase));
-  g.ellipse(x - s * 0.35, y, s * 0.4, s * (0.18 + flap * 0.3)).fill({
+): CreatureParts {
+  const wingLeft = new Graphics();
+  wingLeft.ellipse(-s * 0.35, 0, s * 0.4, s * 0.45).fill({
     color,
     alpha: 0.95,
   });
-  g.ellipse(x + s * 0.35, y, s * 0.4, s * (0.18 + flap * 0.3)).fill({
+  const wingRight = new Graphics();
+  wingRight.ellipse(s * 0.35, 0, s * 0.4, s * 0.45).fill({
     color,
     alpha: 0.95,
   });
-  g.ellipse(x, y, s * 0.12, s * 0.3).fill({ color: accent, alpha: 0.95 });
+  const body = new Graphics();
+  body.ellipse(0, 0, s * 0.12, s * 0.3).fill({ color: accent, alpha: 0.95 });
+  container.addChild(wingLeft, wingRight, body);
+  return { wingLeft, wingRight };
 }
 
-function drawWorm(
-  g: Graphics,
-  x: number,
-  y: number,
+function buildTurtle(
+  container: Container,
   s: number,
-  phase: number,
   color: number,
-): void {
-  const t = performance.now() / 600 + phase;
-  g.moveTo(x - s * 0.5, y);
-  for (let i = 1; i <= 4; i++) {
-    const wx = x - s * 0.5 + (i / 4) * s;
-    g.lineTo(wx, y + Math.sin(t * 2 + i) * s * 0.18);
+  accent: number,
+): CreatureParts {
+  // legs first (behind the shell), pivoted at the hip
+  const legs: Graphics[] = [];
+  for (const lx of [-0.32, 0.18]) {
+    const leg = new Graphics();
+    leg.roundRect(-s * 0.07, 0, s * 0.14, s * 0.3, s * 0.06).fill({
+      color: accent,
+      alpha: 0.95,
+    });
+    leg.position.set(lx * s, -s * 0.12);
+    container.addChild(leg);
+    legs.push(leg);
   }
-  g.stroke({ color, width: Math.max(0.8, s * 0.18), alpha: 0.85 });
+  // head on a stubby neck, pivoted where the neck leaves the shell
+  const head = new Graphics();
+  head.ellipse(s * 0.16, -s * 0.05, s * 0.16, s * 0.12).fill({
+    color: accent,
+    alpha: 0.95,
+  });
+  head.circle(s * 0.24, -s * 0.08, s * 0.035).fill({ color: 0x2b2823 });
+  head.position.set(s * 0.48, -s * 0.28);
+  container.addChild(head);
+  // domed shell with scute arcs + pale belly rim
+  const shell = new Graphics();
+  shell.ellipse(0, -s * 0.34, s * 0.52, s * 0.34).fill({ color, alpha: 0.97 });
+  for (let i = 0; i < 3; i++) {
+    shell
+      .moveTo(-s * (0.38 - i * 0.05), -s * (0.3 + i * 0.12))
+      .quadraticCurveTo(
+        0,
+        -s * (0.62 + i * 0.1),
+        s * (0.38 - i * 0.05),
+        -s * (0.3 + i * 0.12),
+      )
+      .stroke({
+        color: accent,
+        width: Math.max(0.7, s * 0.05),
+        alpha: 0.7,
+      });
+  }
+  shell
+    .roundRect(-s * 0.5, -s * 0.16, s, s * 0.1, s * 0.05)
+    .fill({ color: 0xd9c69c, alpha: 0.8 });
+  container.addChild(shell);
+  return { head, legs };
 }

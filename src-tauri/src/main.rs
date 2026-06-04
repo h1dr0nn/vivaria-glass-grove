@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    terarium_lib::run()
+    vivaria_glass_grove_lib::run()
 }

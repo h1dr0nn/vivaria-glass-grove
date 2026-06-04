@@ -10,8 +10,8 @@ export interface StorageBackend {
   readBackup(): Promise<string | null>;
 }
 
-const LOCAL_KEY = "terarium-save";
-const LOCAL_BAK_KEY = "terarium-save-bak";
+const LOCAL_KEY = "vivaria-save";
+const LOCAL_BAK_KEY = "vivaria-save-bak";
 
 function isTauri(): boolean {
   return "__TAURI_INTERNALS__" in window;

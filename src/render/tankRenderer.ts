@@ -34,8 +34,10 @@ function nightStrength(simTimeMs: number): number {
 export interface TankView {
   /** redraw growth + population visuals — call on sim updates */
   update(sim: SimState, population: readonly PopulationEntry[]): void;
-  /** ambient motion frame — call ONLY from the visible-gated slow ticker */
-  tick(timeMs: number): void;
+  /** water/flora ambience — call from the visible-gated 80ms ticker */
+  tickAmbient(timeMs: number): void;
+  /** creature transforms — call from the visible-gated 60fps rAF loop */
+  tickCreatures(timeMs: number): void;
   /** window drag kicked the tank — purely cosmetic */
   applyWindowImpulse(ax: number, ay: number): void;
   /** true while the water is still ringing from an impulse */
@@ -105,7 +107,7 @@ export function buildTankView(
   stage.addChild(root);
 
   const slosh = createSlosh();
-  let lastTickMs = 0;
+  let lastAmbientMs = 0;
 
   return {
     update(sim: SimState, population: readonly PopulationEntry[]): void {
@@ -113,14 +115,18 @@ export function buildTankView(
       creatures.update(population);
       night.alpha = NIGHT_MAX_ALPHA * nightStrength(sim.simTimeMs);
     },
-    tick(timeMs: number): void {
+    tickAmbient(timeMs: number): void {
       const dt =
-        lastTickMs === 0 ? 0.08 : Math.min(0.25, (timeMs - lastTickMs) / 1000);
-      lastTickMs = timeMs;
+        lastAmbientMs === 0
+          ? 0.08
+          : Math.min(0.25, (timeMs - lastAmbientMs) / 1000);
+      lastAmbientMs = timeMs;
       slosh.step(dt);
       flora.tick(timeMs);
-      creatures.tick(timeMs);
       water.ripple(timeMs / 700, slosh.read());
+    },
+    tickCreatures(timeMs: number): void {
+      creatures.tick(timeMs);
     },
     applyWindowImpulse(ax: number, ay: number): void {
       slosh.impulse(ax, ay);

@@ -1,4 +1,4 @@
-# Terarium 🌱
+# Vivaria - Glass Grove 🌱
 
 > Grow a tiny world from nothing — nuôi một thế giới nhỏ từ con số không.
 

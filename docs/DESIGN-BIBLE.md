@@ -1,4 +1,4 @@
-# Design Bible — RCT Terarium
+# Design Bible — Vivaria - Glass Grove
 
 > Long-term content roadmap from the research phase (2026-06-04). The vertical slice
 > ships ONE archetype band (~30% land RIVERBANK) with ~6–8 species across 3 stages.
