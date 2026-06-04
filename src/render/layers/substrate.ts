@@ -1,8 +1,14 @@
 import { Container, Graphics } from "pixi.js";
 import { mulberry32, splitSeed } from "../../sim/rng";
 import { valueNoise1D } from "../../sim/tankgen/noise";
-import { MATERIAL, cellIndex, type TankState } from "../../sim/tankgen";
+import {
+  MATERIAL,
+  cellIndex,
+  type HardscapePiece,
+  type TankState,
+} from "../../sim/tankgen";
 import { SCENE } from "../palette";
+import { columnWetness } from "../wetness";
 import { screenX, screenY, type TankLayout } from "../layout";
 
 const MATERIAL_FILL: Partial<Record<number, number>> = {
@@ -45,30 +51,6 @@ function shade(color: number, factor: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-/**
- * 1 for submerged columns, fading to 0 over a few columns of dry bank —
- * the shoreline reads damp instead of cutting a hard vertical seam.
- */
-function columnWetness(tank: TankState): number[] {
-  const { width, terrainHeight, waterlineY } = tank;
-  const wetness = new Array<number>(width).fill(0);
-  // distance (in columns) to the nearest submerged column
-  let last = Number.POSITIVE_INFINITY;
-  const dist = new Array<number>(width).fill(Number.POSITIVE_INFINITY);
-  for (let x = 0; x < width; x++) {
-    last = terrainHeight[x] < waterlineY ? 0 : last + 1;
-    dist[x] = Math.min(dist[x], last);
-  }
-  last = Number.POSITIVE_INFINITY;
-  for (let x = width - 1; x >= 0; x--) {
-    last = terrainHeight[x] < waterlineY ? 0 : last + 1;
-    dist[x] = Math.min(dist[x], last);
-  }
-  for (let x = 0; x < width; x++) {
-    wetness[x] = dist[x] === 0 ? 1 : Math.max(0, 0.75 - dist[x] * 0.15);
-  }
-  return wetness;
-}
 
 /**
  * Terrain cross-section as per-column material runs, split at the waterline
@@ -89,9 +71,89 @@ export function buildSubstrate(tank: TankState, layout: TankLayout): Container {
   }
   container.addChild(g);
 
-  container.addChild(buildPebbles(tank, layout, rng));
   container.addChild(buildSurfaceHighlight(tank, layout));
+  container.addChild(buildPebbles(tank, layout, rng));
+  container.addChild(buildHardscapeShapes(tank, layout));
   return container;
+}
+
+/**
+ * Rocks and driftwood drawn as shaded shapes over their stamped footprint —
+ * volume instead of flat gray cell-bands.
+ */
+function buildHardscapeShapes(tank: TankState, layout: TankLayout): Graphics {
+  const g = new Graphics();
+  for (const piece of tank.hardscape) {
+    if (piece.kind === "rock") {
+      drawRock(g, layout, piece);
+    } else {
+      drawDriftwood(g, layout, piece);
+    }
+  }
+  return g;
+}
+
+function drawRock(g: Graphics, layout: TankLayout, piece: HardscapePiece): void {
+  const cx = screenX(layout, piece.x + 0.5);
+  const cy = screenY(layout, piece.y);
+  const rx = piece.halfWidth * layout.scale;
+  const ry = piece.halfHeight * layout.scale;
+
+  // soft contact shadow grounding the rock
+  g.ellipse(cx, cy + ry * 0.75, rx * 0.95, ry * 0.3).fill({
+    color: SCENE.soilDark,
+    alpha: 0.3,
+  });
+  // body
+  g.ellipse(cx, cy, rx, ry).fill(SCENE.rock);
+  // lower shading
+  g.ellipse(cx + rx * 0.06, cy + ry * 0.3, rx * 0.88, ry * 0.62).fill({
+    color: SCENE.rockShadow,
+    alpha: 0.45,
+  });
+  // top-left light
+  g.ellipse(cx - rx * 0.28, cy - ry * 0.42, rx * 0.45, ry * 0.32).fill({
+    color: 0xb9b4a8,
+    alpha: 0.55,
+  });
+}
+
+function drawDriftwood(
+  g: Graphics,
+  layout: TankLayout,
+  piece: HardscapePiece,
+): void {
+  const cx = screenX(layout, piece.x + 0.5);
+  const cy = screenY(layout, piece.y);
+  const rx = piece.halfWidth * layout.scale;
+  const ry = Math.max(piece.halfHeight * layout.scale, layout.scale * 1.1);
+
+  g.ellipse(cx, cy + ry * 0.7, rx * 0.9, ry * 0.28).fill({
+    color: SCENE.soilDark,
+    alpha: 0.28,
+  });
+  g.roundRect(cx - rx, cy - ry * 0.55, rx * 2, ry * 1.1, ry * 0.5).fill(
+    SCENE.wood,
+  );
+  // underside shading
+  g.roundRect(cx - rx * 0.96, cy + ry * 0.05, rx * 1.92, ry * 0.45, ry * 0.25)
+    .fill({ color: SCENE.woodDark, alpha: 0.6 });
+  // grain lines
+  for (let i = 0; i < 3; i++) {
+    const ly = cy - ry * 0.3 + i * ry * 0.28;
+    g.moveTo(cx - rx * (0.8 - i * 0.1), ly)
+      .lineTo(cx + rx * (0.75 - i * 0.12), ly)
+      .stroke({
+        color: SCENE.woodDark,
+        alpha: 0.5,
+        width: Math.max(0.8, layout.scale * 0.12),
+      });
+  }
+  // a worn end cap
+  g.ellipse(cx + rx * 0.92, cy - ry * 0.05, ry * 0.32, ry * 0.4).fill({
+    color: SCENE.woodDark,
+    alpha: 0.8,
+  });
 }
 
 function drawColumn(
@@ -180,8 +242,13 @@ function buildSurfaceHighlight(tank: TankState, layout: TankLayout): Graphics {
   return surface;
 }
 
+/** Rock/wood cells are skipped here — drawn as shaded shapes on top. */
 function isSolid(material: number): boolean {
   return (
-    material !== MATERIAL.air && material !== MATERIAL.water && material >= 0
+    material !== MATERIAL.air &&
+    material !== MATERIAL.water &&
+    material !== MATERIAL.rock &&
+    material !== MATERIAL.wood &&
+    material >= 0
   );
 }

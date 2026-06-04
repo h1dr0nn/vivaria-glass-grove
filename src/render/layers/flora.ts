@@ -3,6 +3,7 @@ import { mulberry32, splitSeed } from "../../sim/rng";
 import type { SimState } from "../../sim/types";
 import { ZONE, cellIndex, type TankState } from "../../sim/tankgen";
 import { SCENE } from "../palette";
+import { columnWetness } from "../wetness";
 import { screenX, screenY, type TankLayout } from "../layout";
 
 /**
@@ -56,13 +57,14 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
     isPlantableSurface,
   );
   const speckSeeds = makeSpecks(tank, splitSeed(tank.seed, ANCHOR_STREAM.microbes));
+  const wetness = columnWetness(tank);
 
   let lastSim: SimState | null = null;
   let swayPhase = 0;
 
   const update = (sim: SimState): void => {
     lastSim = sim;
-    drawMicrobes(microbeGfx, tank, layout, speckSeeds, sim, swayPhase);
+    drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, sim, swayPhase);
     drawAlgae(algaeGfx, tank, layout, algaeAnchors, sim.scalars.algae);
     drawPlants(plantGfx, layout, plantAnchors, sim.scalars.plants, swayPhase);
   };
@@ -70,7 +72,7 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
   const tick = (timeMs: number): void => {
     swayPhase = timeMs / 1000;
     if (!lastSim) return;
-    drawMicrobes(microbeGfx, tank, layout, speckSeeds, lastSim, swayPhase);
+    drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, lastSim, swayPhase);
     drawPlants(plantGfx, layout, plantAnchors, lastSim.scalars.plants, swayPhase);
   };
 
@@ -161,6 +163,7 @@ function drawMicrobes(
   tank: TankState,
   layout: TankLayout,
   specks: readonly Speck[],
+  wetness: readonly number[],
   sim: SimState,
   phase: number,
 ): void {
@@ -168,21 +171,40 @@ function drawMicrobes(
   const strength = sim.scalars.microbes;
   if (strength <= 0.01) return;
 
-  // living film along the substrate surface — the "it's alive" shimmer
-  const filmAlpha = Math.min(0.5, strength * 0.55);
-  for (let x = 0; x < tank.width - 1; x += 2) {
-    const y = screenY(layout, tank.terrainHeight[x] + 0.2);
-    g.rect(
-      screenX(layout, x),
-      y,
-      layout.scale * 2,
-      layout.scale * 0.55,
-    ).fill({ color: SCENE.microbeGlow, alpha: filmAlpha });
+  // The "it's alive" shimmer: a soft film hugging DAMP substrate only,
+  // handing the stage to algae as the bloom takes over (never a permanent
+  // gray overlay on dry land).
+  const handoff = Math.max(0, 1 - sim.scalars.algae * 1.4);
+  const filmAlpha = Math.min(0.3, strength * 0.45) * handoff;
+  if (filmAlpha > 0.02) {
+    let penDown = false;
+    for (let x = 0; x < tank.width; x++) {
+      if (wetness[x] < 0.4) {
+        penDown = false;
+        continue;
+      }
+      const px = screenX(layout, x) + layout.scale / 2;
+      const py = screenY(layout, tank.terrainHeight[x] + 0.25);
+      if (!penDown) {
+        g.moveTo(px, py);
+        penDown = true;
+      } else {
+        g.lineTo(px, py);
+      }
+    }
+    g.stroke({
+      color: SCENE.microbeGlow,
+      alpha: filmAlpha,
+      width: Math.max(1, layout.scale * 0.45),
+    });
   }
 
-  // drifting motes in the water — the first visible sign of life
-  const visible = Math.floor(specks.length * Math.min(1, strength * 1.6));
-  const moteAlpha = Math.min(0.65, 0.2 + strength * 0.45);
+  // drifting motes in the water — fade as larger life takes the scene
+  const moteFade = Math.max(0.25, 1 - sim.scalars.algae * 0.6);
+  const visible = Math.floor(
+    specks.length * Math.min(1, strength * 1.6) * moteFade,
+  );
+  const moteAlpha = Math.min(0.55, 0.18 + strength * 0.4) * moteFade;
   for (let i = 0; i < visible; i++) {
     const speck = specks[i];
     const drift = Math.sin(phase * 0.5 + speck.phase) * 0.4;
