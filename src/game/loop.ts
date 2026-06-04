@@ -28,6 +28,8 @@ export interface GameLoop {
   stop(): void;
   /** advance by real elapsed time once — exposed for tests */
   tickOnce(): void;
+  /** jump the world forward by simulated time (dev boost / future sleep) */
+  advanceBy(ms: number): void;
   current(): SimState | null;
 }
 
@@ -97,6 +99,18 @@ export function createGameLoop(
       state = null;
     },
     tickOnce,
+    advanceBy(ms: number): void {
+      if (!state || ms <= 0) return;
+      // chunked so the per-call catch-up clamp never truncates the jump
+      let remaining = ms;
+      while (remaining > 0) {
+        const chunk = Math.min(remaining, 12 * 60 * 60 * 1000);
+        const result = advanceSim(state, chunk, env);
+        state = result.state;
+        callbacks.onUpdate(state, result.events);
+        remaining -= chunk;
+      }
+    },
     current(): SimState | null {
       return state;
     },

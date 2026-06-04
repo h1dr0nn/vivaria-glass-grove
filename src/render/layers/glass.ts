@@ -9,17 +9,32 @@ export interface GlassLayers {
   readonly front: Container;
 }
 
+export interface GlassFrame {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  readonly radius: number;
+}
+
+/** Shared inner-glass geometry — the content mask must match it exactly. */
+export function glassFrame(layout: TankLayout): GlassFrame {
+  return {
+    x: layout.originX,
+    y: layout.originY - layout.tankHeightPx,
+    w: layout.tankWidthPx,
+    h: layout.tankHeightPx,
+    radius: Math.max(6, layout.scale * 1.6),
+  };
+}
+
 /**
  * The glass box, cabinet-oblique: a faint inner back wall behind the scene,
  * a visible top rim receding up-right, soft inner-corner occlusion, and the
  * crisp front pane on top. Static — built once.
  */
 export function buildGlass(layout: TankLayout): GlassLayers {
-  const x = layout.originX;
-  const y = layout.originY - layout.tankHeightPx;
-  const w = layout.tankWidthPx;
-  const h = layout.tankHeightPx;
-  const radius = Math.max(6, layout.scale * 1.6);
+  const { x, y, w, h, radius } = glassFrame(layout);
   const { depthX, depthY } = layout;
 
   // ---------------------------------------------------------------- back
@@ -30,6 +45,15 @@ export function buildGlass(layout: TankLayout): GlassLayers {
     .fill({ color: 0xd8d2bd, alpha: 0.35 });
   backWall
     .roundRect(x + depthX, y + depthY, w, h, radius)
+    .stroke({ color: SCENE.glassEdge, alpha: 0.4, width: 1.5 });
+  // bottom depth edges joining the front box to the back box — mostly
+  // occluded by substrate (correct physically), they complete the volume
+  // wherever the floor dips low
+  backWall
+    .moveTo(x + radius * 0.3, y + h - radius * 0.3)
+    .lineTo(x + depthX + radius * 0.3, y + h + depthY - radius * 0.3)
+    .moveTo(x + w - radius * 0.3, y + h - radius * 0.3)
+    .lineTo(x + w + depthX - radius * 0.3, y + h + depthY - radius * 0.3)
     .stroke({ color: SCENE.glassEdge, alpha: 0.4, width: 1.5 });
   back.addChild(backWall);
 
@@ -62,6 +86,16 @@ export function buildGlass(layout: TankLayout): GlassLayers {
     .moveTo(x + depthX, y + depthY)
     .lineTo(x + w + depthX, y + depthY)
     .stroke({ color: 0xffffff, alpha: 0.65, width: 1.5 });
+  // the rim's slanted sides ARE the top depth edges — stroking them joins
+  // each front-top corner to its back-top corner so the two boxes read as
+  // ONE see-through volume, not two rectangles stacked (the line must be
+  // a step darker than the rim or it vanishes against it)
+  rim
+    .moveTo(x + radius * 0.3, y + radius * 0.1)
+    .lineTo(x + depthX + radius * 0.3, y + depthY + radius * 0.1)
+    .moveTo(x + w - radius * 0.3, y + radius * 0.1)
+    .lineTo(x + w + depthX - radius * 0.3, y + depthY + radius * 0.1)
+    .stroke({ color: 0xb6ae96, alpha: 0.75, width: 1.5 });
   // right rim sliver (the receding side wall's top edge)
   rim
     .poly([

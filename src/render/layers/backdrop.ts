@@ -25,13 +25,20 @@ export function buildBackdrop(
   room.rect(0, 0, width, height).fill(gradient);
   container.addChild(room);
 
-  // soft tinted shadow pooling under the tank — grounds it in the room
+  // soft tinted shadow pooling under the tank — three stacked translucent
+  // ellipses so the edge feathers instead of stepping at the corners
   const shadow = new Graphics();
   const cx = layout.originX + layout.tankWidthPx / 2;
-  const cy = layout.originY + layout.scale * 2.5;
-  shadow
-    .ellipse(cx, cy, layout.tankWidthPx * 0.56, layout.scale * 4)
-    .fill({ color: SCENE.glassShadow, alpha: 0.28 });
+  const cy = layout.originY + layout.scale * 3;
+  for (const [spread, alpha] of [
+    [1.0, 0.07],
+    [0.82, 0.09],
+    [0.62, 0.11],
+  ] as const) {
+    shadow
+      .ellipse(cx, cy, layout.tankWidthPx * 0.56 * spread, layout.scale * 3.4 * spread)
+      .fill({ color: SCENE.glassShadow, alpha });
+  }
   container.addChild(shadow);
 
   return container;

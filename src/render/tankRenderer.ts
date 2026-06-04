@@ -7,7 +7,7 @@ import { computeLayout } from "./layout";
 import { buildBackdrop } from "./layers/backdrop";
 import { buildCreatures } from "./layers/creatures";
 import { buildFlora } from "./layers/flora";
-import { buildGlass } from "./layers/glass";
+import { buildGlass, glassFrame } from "./layers/glass";
 import { buildSubstrate } from "./layers/substrate";
 import { buildWater } from "./layers/water";
 
@@ -62,6 +62,22 @@ export function buildTankView(
   const creatures = buildCreatures(tank, layout);
   const glass = buildGlass(layout);
 
+  // everything INSIDE the tank clips to the rounded glass interior —
+  // square substrate cells must never poke past the rounded corners
+  const frame = glassFrame(layout);
+  const contents = new Container();
+  contents.addChild(
+    water.behind,
+    buildSubstrate(tank, layout),
+    flora.container,
+    creatures.container,
+    water.overlay,
+  );
+  const contentsMask = new Graphics()
+    .roundRect(frame.x, frame.y, frame.w, frame.h, frame.radius)
+    .fill(0xffffff);
+  contents.mask = contentsMask;
+
   // the slow indigo of night, laid over the whole scene
   const night = new Graphics();
   night.rect(0, 0, viewWidth, viewHeight).fill(NIGHT_COLOR);
@@ -70,11 +86,8 @@ export function buildTankView(
   root.addChild(
     buildBackdrop(viewWidth, viewHeight, layout),
     glass.back,
-    water.behind,
-    buildSubstrate(tank, layout),
-    flora.container,
-    creatures.container,
-    water.overlay,
+    contents,
+    contentsMask,
     glass.front,
     night,
   );

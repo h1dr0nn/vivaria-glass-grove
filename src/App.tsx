@@ -328,6 +328,18 @@ export default function App() {
     window.addEventListener("beforeunload", onBeforeUnload);
     onCleanup(() => window.removeEventListener("beforeunload", onBeforeUnload));
 
+    // dev-only cheat: G fast-forwards growth 6h for visual testing
+    if (import.meta.env.DEV) {
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key.toLowerCase() !== "g" || !loop) return;
+        loop.advanceBy(6 * HOUR_MS);
+        void persist();
+        pushToast("Time skip (dev)", "+6 hours of growth");
+      };
+      window.addEventListener("keydown", onKey);
+      onCleanup(() => window.removeEventListener("keydown", onKey));
+    }
+
     // rebuild the scene when the window is resized (debounced)
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {

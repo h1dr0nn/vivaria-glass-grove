@@ -178,68 +178,112 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       width: Math.max(1, layout.scale * 0.35),
     });
 
-    // Foam at the shore. In this projection the water's edge against the
-    // bank is not a point — it is the SEGMENT joining the near-line contact
-    // P0 to the far-line contact P1 (= P0 + depth vector). The contact line
-    // is drawn and the bubbles are strung along it, shrinking toward the
-    // back, churning harder during a slosh.
+    // Shore fringe. The water's edge against the bank is the SEGMENT from
+    // the near-line contact P0 to the far-line contact P1 (P0 + depth
+    // vector). Five quiet layers, back-to-front, all phase-driven (research:
+    // softness comes from stacked translucent fills + uneven rhythm, never
+    // from more bubbles): wet lip → foam ribbons → scalloped rim → periodic
+    // lap waves → meniscus. Slosh churn AMPLIFIES, it never adds shapes.
     const churn = 1 + (slosh?.wave ?? 0) * 2.2;
+    const s = layout.scale;
     const foam = (boundary: number, into: 1 | -1): void => {
       const x0 = screenX(layout, boundary);
       const y0 = frontY(boundary);
-      const x1 = x0 + layout.depthX;
-      const y1 = backY(boundary);
+      const ax = layout.depthX;
+      const ay = backY(boundary) - y0;
+      const len = Math.hypot(ax, ay) || 1;
+      // unit normal of the contact segment, pointing into the water
+      let nx = -ay / len;
+      let ny = ax / len;
+      if (Math.sign(nx || 1) !== Math.sign(into)) {
+        nx = -nx;
+        ny = -ny;
+      }
+      const at = (t: number, d: number): [number, number] => [
+        x0 + ax * t + nx * d,
+        y0 + ay * t + ny * d,
+      ];
 
-      // the water's edge running into the screen along the bank
-      surfaceLine
-        .moveTo(x0, y0)
-        .lineTo(x1, y1)
-        .stroke({
+      // 1 — wet lip grounding the seam on the bank side
+      const lip: number[] = [];
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        lip.push(...at(t, -0.05 * s));
+      }
+      for (let i = 4; i >= 0; i--) {
+        const t = i / 4;
+        lip.push(...at(t, -0.55 * s));
+      }
+      surfaceLine.poly(lip).fill({ color: SCENE.sandWet, alpha: 0.4 });
+
+      // 2 — translucent ribbons feathering into the water, whitest at shore
+      const RIBBONS = [
+        { d: 0.18, half: 0.28, color: 0xf7fbf9, alpha: 0.5 },
+        { d: 0.75, half: 0.22, color: 0xe8f4f0, alpha: 0.3 },
+        { d: 1.35, half: 0.18, color: 0xcfe6e6, alpha: 0.17 },
+      ];
+      for (const [ri, r] of RIBBONS.entries()) {
+        const top: number[] = [];
+        const bottom: number[] = [];
+        for (let i = 0; i <= 6; i++) {
+          const t = i / 6;
+          const wob =
+            Math.sin(phase * 0.8 + t * 6 + ri * 2.1 + boundary) * 0.12 * s;
+          const taper =
+            Math.sin(Math.PI * (0.08 + 0.84 * t)) ** 0.7 * r.half * s;
+          const [sx, sy] = at(t, r.d * s + wob);
+          top.push(sx + nx * taper, sy + ny * taper);
+          bottom.unshift(sx - nx * taper, sy - ny * taper);
+        }
+        surfaceLine
+          .poly([...top, ...bottom])
+          .fill({ color: r.color, alpha: Math.min(0.65, r.alpha * churn) });
+      }
+
+      // 3 — scalloped foam rim: uneven crests, fat near P0, thin toward P1,
+      // phase-scrolled so the fringe shimmers like a travelling lap
+      const rim: number[] = [];
+      const SAMPLES = 12;
+      for (let i = 0; i <= SAMPLES; i++) {
+        const t = i / SAMPLES;
+        const jitter =
+          0.65 +
+          0.25 * Math.sin(t * 9 + phase * 0.65 + boundary * 1.3) +
+          0.15 * Math.sin(t * 17 - phase * 0.4 + boundary);
+        const bump =
+          Math.max(0, (0.34 - 0.15 * t) * jitter) *
+          s *
+          Math.min(churn, 1.8);
+        rim.push(...at(t, 0.06 * s + bump));
+      }
+      for (let i = SAMPLES; i >= 0; i--) {
+        rim.push(...at(i / SAMPLES, 0));
+      }
+      surfaceLine.poly(rim).fill({ color: 0xf2faf6, alpha: 0.55 });
+
+      // 4 — periodic lap waves: born at the seam, drift out, ease-out fade
+      for (const offset of [0, 0.5]) {
+        const u = (phase / 3.7 + offset + boundary * 0.13) % 1;
+        const fade = (1 - u) * (1 - u) * 0.4 * Math.min(churn, 1.6);
+        if (fade < 0.04) continue;
+        const reach = (0.4 + u * 2.8) * s;
+        for (let i = 0; i <= 6; i++) {
+          const t = i / 6;
+          const wob = Math.sin(t * 7 + phase * 0.9 + boundary) * 0.15 * s;
+          const [lx, ly] = at(t, reach + wob);
+          if (i === 0) surfaceLine.moveTo(lx, ly);
+          else surfaceLine.lineTo(lx, ly);
+        }
+        surfaceLine.stroke({
           color: SCENE.surfaceLine,
-          alpha: 0.65,
-          width: Math.max(1, layout.scale * 0.3),
+          alpha: fade,
+          width: Math.max(0.8, (1 - u) * 0.28 * s),
         });
-
-      // bubbles riding the contact segment
-      const COUNT = 7;
-      for (let i = 0; i < COUNT; i++) {
-        const t = i / (COUNT - 1);
-        const wobX =
-          Math.sin(phase * 0.9 + i * 2.1 + boundary * 0.7) *
-          layout.scale *
-          0.18;
-        const wobY =
-          Math.cos(phase * 1.3 + i * 1.7 + boundary * 0.31) *
-          layout.scale *
-          0.12;
-        const radius =
-          layout.scale *
-          (0.36 - t * 0.14) *
-          churn *
-          (0.8 + 0.2 * Math.sin(phase * 1.1 + i * 2.7 + boundary));
-        if (radius < 0.5) continue;
-        surfaceLine
-          .circle(x0 + (x1 - x0) * t + wobX, y0 + (y1 - y0) * t + wobY, radius)
-          .fill({ color: 0xf2faf6, alpha: Math.max(0.25, 0.7 - t * 0.35) });
       }
 
-      // a couple of stray bubbles lapping from the near contact into the water
-      for (let j = 0; j < 3; j++) {
-        const drift = (j + 0.8) * 0.55;
-        const fx = screenX(layout, boundary + into * drift);
-        const fy =
-          frontY(boundary + into * drift) +
-          Math.sin(phase * 1.2 + j * 2.3 + boundary) * layout.scale * 0.14;
-        const radius =
-          layout.scale *
-          (0.22 - j * 0.05) *
-          churn *
-          (0.8 + 0.2 * Math.cos(phase + j * 1.9));
-        if (radius < 0.5) continue;
-        surfaceLine
-          .circle(fx, fy, radius)
-          .fill({ color: 0xf2faf6, alpha: 0.5 - j * 0.12 });
-      }
+      // 5 — meniscus: a tiny bright stitch where the flat line meets the bank
+      const [mx, my] = at(0.05, 0.02 * s);
+      surfaceLine.circle(mx, my, 0.16 * s).fill({ color: 0xffffff, alpha: 0.7 });
     };
     for (const run of bandRuns) {
       if (run.start > 0) foam(run.start, 1); // land on the left
