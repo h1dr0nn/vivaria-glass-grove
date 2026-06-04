@@ -5,7 +5,7 @@ import type { EnvSummary } from "../types";
  * y = row 0..height-1 measured from the BOTTOM of the tank upward.
  */
 
-export const GEN_VERSION = 1;
+export const GEN_VERSION = 2; // v2: steady substrate bands (no per-column jitter)
 
 export const MATERIAL = {
   air: 0,

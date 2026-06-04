@@ -313,6 +313,9 @@
 }
 
 .hud-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   letter-spacing: 0.06em;
@@ -325,6 +328,14 @@
   transition:
     color var(--duration-fast) var(--ease-out-soft),
     border-color var(--duration-fast) var(--ease-out-soft);
+}
+
+.hud-button svg {
+  flex-shrink: 0;
+}
+
+.hud-button-icon {
+  padding: var(--space-2) var(--space-3);
 }
 
 .hud-button:hover,

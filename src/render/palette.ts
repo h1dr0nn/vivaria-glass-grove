@@ -18,8 +18,8 @@ export const SCENE = {
   waterTintOverlay: 0x6fa7bb,
   surfaceLine: 0xe8f4f0,
 
-  drainage: 0x7d746a,
-  drainageDark: 0x6a625a,
+  drainage: 0x6e6257,
+  drainageDark: 0x5d5349,
   soil: 0x5d4734,
   soilDark: 0x4c3a2b,
   sand: 0xd9c69c,

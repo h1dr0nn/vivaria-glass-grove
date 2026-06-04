@@ -22,8 +22,10 @@ export function buildMaterials(
   for (let x = 0; x < width; x++) {
     const surface = terrain[x];
     const isLand = surface >= waterlineY;
-    const drainage = 2 + (isLand ? 1 : 0) + (rng() < 0.5 ? 1 : 0);
-    const capThickness = 1 + (rng() < 0.35 ? 1 : 0);
+    // steady bands (per-column jitter read as rendering glitches)
+    const drainage = isLand ? 3 : 2;
+    const capThickness = isLand ? 2 : 1;
+    void rng; // reserved for future substrate variation
     const cap: number =
       surface < waterlineY
         ? MATERIAL.sand

@@ -1,5 +1,6 @@
 import { Show, createSignal } from "solid-js";
 import { isMuted, setMuted } from "../audio/engine";
+import { IconBook, IconSprout, IconVolume, IconVolumeMuted } from "./icons";
 import {
   PHASE_INFO,
   formatSimAge,
@@ -45,12 +46,12 @@ export default function Hud(props: HudProps) {
         <div class="hud-actions">
           <button
             type="button"
-            class="hud-button"
+            class="hud-button hud-button-icon"
             onClick={toggleMute}
             title={muted() ? "Unmute" : "Mute"}
             aria-label={muted() ? "Unmute sounds" : "Mute sounds"}
           >
-            {muted() ? "🔇" : "🔊"}
+            {muted() ? <IconVolumeMuted /> : <IconVolume />}
           </button>
           <button
             type="button"
@@ -58,10 +59,10 @@ export default function Hud(props: HudProps) {
             classList={{ active: almanacOpen() }}
             onClick={() => setAlmanacOpen(!almanacOpen())}
           >
-            Almanac
+            <IconBook /> Almanac
           </button>
           <button type="button" class="hud-button" onClick={props.onNewTank}>
-            New tank
+            <IconSprout /> New tank
           </button>
         </div>
       </div>

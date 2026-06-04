@@ -3,6 +3,7 @@ import TankPreview from "./TankPreview";
 import { archetypeOf } from "../sim/tankgen";
 import { mix32 } from "../sim/rng";
 import type { SaveData } from "../persistence/saveSchema";
+import { IconDice } from "./icons";
 import { formatSimAge } from "./store";
 
 interface NewTankScreenProps {
@@ -127,8 +128,9 @@ export default function NewTankScreen(props: NewTankScreenProps) {
             class="dice-button"
             onClick={rollSeed}
             title="Random seed"
+            aria-label="Random seed"
           >
-            ⚄
+            <IconDice size={18} />
           </button>
         </div>
 
