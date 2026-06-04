@@ -581,91 +581,71 @@ function drawTree(
   const baseY = screenY(layout, anchor.y);
   const v = anchor.variant;
   const leanSign = v % 2 === 0 ? 1 : -1;
-  const lean = leanSign * (0.5 + (v % 5) * 0.12);
-  const trunkPx = layout.scale * (6 + growth * 24);
-  // the trunk THICKENS with growth - a bonsai earns its girth
-  const baseWidth = layout.scale * (0.5 + growth * 1.7);
-  const sway = Math.sin(phase * 0.5 + v) * 0.06 * growth;
+  const s = layout.scale;
+  // A BONSAI is SHORT and STOUT: a fat, gnarled, fast-tapering trunk with a
+  // wide root flare (nebari) and foliage pruned into stacked horizontal
+  // clouds. Height:girth ≈ 3-4:1, never the tall thin sapling we had.
+  const trunkPx = s * (7 + growth * 9); // 7..16 cells — short
+  const baseWidth = s * (2.2 + growth * 3.2); // 2.2..5.4 cells — THICK
+  const sway = Math.sin(phase * 0.5 + v) * 0.05 * growth;
 
-  const midX = baseX + lean * layout.scale * 0.6;
-  const midY = baseY - trunkPx * 0.5;
-  const topX = baseX - lean * layout.scale * 0.35 + sway * trunkPx;
-  const topY = baseY - trunkPx;
-
-  // trunk as a TAPERED POLYGON along the S-curve (wide rooted base → tip),
-  // with a lit edge - a stroked line read as a stick, not a trunk
+  // gnarled trunk: a couple of bends (movement) up a short spine
+  const bend = (0.7 + (v % 4) * 0.25) * leanSign;
   const spine = (t: number): [number, number] => {
-    // composite quadratic: base→mid then mid→top
-    if (t < 0.5) {
-      const u = t * 2;
-      const cx = baseX + lean * layout.scale * 0.5;
-      const cy = baseY - trunkPx * 0.28;
-      return [
-        (1 - u) * (1 - u) * baseX + 2 * (1 - u) * u * cx + u * u * midX,
-        (1 - u) * (1 - u) * baseY + 2 * (1 - u) * u * cy + u * u * midY,
-      ];
-    }
-    const u = (t - 0.5) * 2;
-    const cx = midX - lean * layout.scale * 0.4;
-    const cy = midY - trunkPx * 0.28;
-    return [
-      (1 - u) * (1 - u) * midX + 2 * (1 - u) * u * cx + u * u * topX,
-      (1 - u) * (1 - u) * midY + 2 * (1 - u) * u * cy + u * u * topY,
-    ];
+    const x =
+      baseX +
+      Math.sin(t * Math.PI * 1.3) * bend * s * 1.4 +
+      sway * t * trunkPx;
+    const y = baseY - t * trunkPx;
+    return [x, y];
   };
+
+  // trunk body — tapered polygon, fat base to a narrow apex
+  const widthAt = (t: number): number =>
+    (baseWidth * (1 - t) ** 1.4 + s * 0.5) * 0.5;
   const left: number[] = [];
   const right: number[] = [];
-  const SEGS = 8;
+  const SEGS = 10;
   for (let i = 0; i <= SEGS; i++) {
     const t = i / SEGS;
     const [sx, sy] = spine(t);
-    const w = baseWidth * (1 - t * 0.72) * 0.5;
+    const w = widthAt(t);
     left.push(sx - w, sy);
     right.unshift(sx + w, sy);
   }
-  // root flare
-  left.unshift(baseX - baseWidth * 0.95, baseY);
-  right.push(baseX + baseWidth * 0.95, baseY);
+  // nebari — root flare spreading wider than the trunk at the very base
+  left.unshift(baseX - baseWidth * 0.85, baseY + s * 0.3);
+  right.push(baseX + baseWidth * 0.85, baseY + s * 0.3);
   g.poly([...left, ...right]).fill(SCENE.woodDark);
-  // lit side
-  const litLeft: number[] = [];
-  const litRight: number[] = [];
+  // surface roots humping out either side of the base
+  for (const side of [-1, 1]) {
+    g.ellipse(baseX + side * baseWidth * 0.6, baseY, baseWidth * 0.4, s * 0.5).fill(
+      SCENE.woodDark,
+    );
+  }
+  // lit left face + a few dark bark furrows for gnarl
+  const litL: number[] = [];
+  const litR: number[] = [];
   for (let i = 0; i <= SEGS; i++) {
     const t = i / SEGS;
     const [sx, sy] = spine(t);
-    const w = baseWidth * (1 - t * 0.72) * 0.5;
-    litLeft.push(sx - w * 0.7, sy);
-    litRight.unshift(sx - w * 0.05, sy);
+    const w = widthAt(t);
+    litL.push(sx - w * 0.8, sy);
+    litR.unshift(sx - w * 0.1, sy);
   }
-  g.poly([...litLeft, ...litRight]).fill({ color: SCENE.wood, alpha: 0.85 });
-
-  // short branches from the upper trunk - tips stay NEAR the crown so the
-  // canopy reads as one mass, never lollipops on sticks
-  const branchCount = 1 + Math.floor(growth * 3);
-  const tips: { x: number; y: number }[] = [{ x: topX, y: topY }];
-  for (let b = 0; b < branchCount; b++) {
-    const t = 0.62 + (b / Math.max(1, branchCount)) * 0.28;
-    const [ax, ay] = spine(t);
-    const dir = (b % 2 === 0 ? 1 : -1) * (0.8 + ((v >> b) & 3) * 0.12);
-    const reach = trunkPx * 0.18 * (0.8 + growth * 0.4);
-    const bx = ax + dir * reach;
-    const by = ay - reach * 0.7;
+  g.poly([...litL, ...litR]).fill({ color: SCENE.wood, alpha: 0.85 });
+  for (let f = 0; f < 2; f++) {
+    const [ax, ay] = spine(0.15 + f * 0.3);
+    const [bx, by] = spine(0.5 + f * 0.28);
     g.moveTo(ax, ay)
-      .quadraticCurveTo(ax + dir * reach * 0.5, ay - reach * 0.2, bx, by)
-      .stroke({
-        color: SCENE.woodDark,
-        width: Math.max(1, baseWidth * 0.3 * (1 - t * 0.4)),
-        alpha: 0.9,
-      });
-    tips.push({ x: bx, y: by });
+      .quadraticCurveTo((ax + bx) / 2 + s * 0.3, (ay + by) / 2, bx, by)
+      .stroke({ color: SCENE.woodDark, width: Math.max(1, s * 0.18), alpha: 0.5 });
   }
 
-  // canopy: a COHESIVE cloud - pads cluster tightly around the crown
-  // centroid, drawn shadow→body→highlight so they merge into one mass
-  const crownX = tips.reduce((s, t) => s + t.x, 0) / tips.length;
-  const crownY = tips.reduce((s, t) => s + t.y, 0) / tips.length - trunkPx * 0.06;
-  const padCount = 3 + Math.floor(growth * 4) + (v % 2);
-  const padScale = layout.scale * (1.6 + growth * 2.4);
+  // foliage as STACKED HORIZONTAL CLOUD PADS (cloud-pruned tiers) — the
+  // defining bonsai canopy. Lower tiers wider, apex rounded.
+  const tierCount = 2 + Math.floor(growth * 2); // 2..4 tiers
+  const padScale = s * (1.5 + growth * 1.8);
   interface Pad {
     cx: number;
     cy: number;
@@ -673,30 +653,36 @@ function drawTree(
     ry: number;
   }
   const pads: Pad[] = [];
-  for (let i = 0; i < padCount; i++) {
-    const anchorTip = tips[i % tips.length];
-    // pull each pad toward the crown so the cloud connects
-    const jx = Math.sin(v * 12.9898 + i * 7.13) * padScale * 0.45;
-    const jy = Math.cos(v * 4.1414 + i * 5.27) * padScale * 0.25;
-    const cx = (anchorTip.x + crownX) / 2 + jx + sway * padScale * 0.4;
-    const cy = (anchorTip.y + crownY) / 2 + jy - padScale * 0.15;
-    const rx = padScale * (0.85 + (i % 3) * 0.14);
-    pads.push({ cx, cy, rx, ry: rx * 0.72 });
+  for (let tier = 0; tier < tierCount; tier++) {
+    const ft = tier / Math.max(1, tierCount - 1); // 0 bottom .. 1 apex
+    const [tx, ty] = spine(0.5 + ft * 0.5);
+    // bottom tiers are broad shelves, the apex is a compact dome
+    const tierWidth = padScale * (1.9 - ft * 1.0);
+    const side = tier % 2 === 0 ? leanSign : -leanSign;
+    const cx = tx + side * tierWidth * 0.25;
+    const cy = ty - padScale * 0.2;
+    const blobs = 3 + (tier % 2);
+    for (let b = 0; b < blobs; b++) {
+      const bt = (b / (blobs - 1) - 0.5) * 2;
+      pads.push({
+        cx: cx + bt * tierWidth * 0.5 + sway * padScale * 0.4,
+        cy: cy - Math.cos(bt * 1.2) * padScale * 0.18,
+        rx: tierWidth * (0.42 - Math.abs(bt) * 0.08),
+        ry: tierWidth * 0.3,
+      });
+    }
   }
-  for (const pad of pads) {
-    g.ellipse(pad.cx + pad.rx * 0.1, pad.cy + pad.ry * 0.3, pad.rx * 0.92, pad.ry * 0.85).fill({
+  for (const p of pads) {
+    g.ellipse(p.cx + p.rx * 0.1, p.cy + p.ry * 0.35, p.rx * 0.95, p.ry * 0.9).fill({
       color: SCENE.algaeDeep,
       alpha: 0.85,
     });
   }
-  for (const pad of pads) {
-    g.ellipse(pad.cx, pad.cy, pad.rx, pad.ry).fill({
-      color: SCENE.leaf,
-      alpha: 0.96,
-    });
+  for (const p of pads) {
+    g.ellipse(p.cx, p.cy, p.rx, p.ry).fill({ color: SCENE.leaf, alpha: 0.97 });
   }
-  for (const pad of pads) {
-    g.ellipse(pad.cx - pad.rx * 0.16, pad.cy - pad.ry * 0.28, pad.rx * 0.62, pad.ry * 0.55).fill({
+  for (const p of pads) {
+    g.ellipse(p.cx - p.rx * 0.18, p.cy - p.ry * 0.3, p.rx * 0.6, p.ry * 0.5).fill({
       color: SCENE.leafLight,
       alpha: 0.9,
     });
@@ -706,11 +692,11 @@ function drawTree(
   if (plants >= 0.85 && v % 3 === 0) {
     const blossoms = 3 + Math.floor(((plants - 0.85) / 0.15) * 6);
     for (let k = 0; k < blossoms; k++) {
-      const tip = tips[k % tips.length];
+      const p = pads[k % pads.length];
       g.circle(
-        tip.x + Math.sin(v * 7.7 + k * 3.3) * padScale * 0.7,
-        tip.y + Math.cos(v * 3.3 + k * 2.1) * padScale * 0.5 - padScale * 0.2,
-        Math.max(0.8, layout.scale * 0.26),
+        p.cx + Math.sin(v * 7.7 + k * 3.3) * p.rx,
+        p.cy + Math.cos(v * 3.3 + k * 2.1) * p.ry,
+        Math.max(0.8, s * 0.26),
       ).fill({ color: 0xe89bb0, alpha: 0.95 });
     }
   }
