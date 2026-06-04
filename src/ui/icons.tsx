@@ -67,6 +67,32 @@ export function IconBook(props: IconProps) {
   );
 }
 
+export function IconPlay(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <polygon points="6 3 20 12 6 21 6 3" />
+    </Svg>
+  );
+}
+
+export function IconPause(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+    </Svg>
+  );
+}
+
+export function IconFastForward(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <polygon points="13 19 22 12 13 5 13 19" />
+      <polygon points="2 19 11 12 2 5 2 19" />
+    </Svg>
+  );
+}
+
 export function IconSprout(props: IconProps) {
   return (
     <Svg size={props.size}>

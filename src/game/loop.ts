@@ -30,8 +30,15 @@ export interface GameLoop {
   tickOnce(): void;
   /** jump the world forward by simulated time (dev boost / future sleep) */
   advanceBy(ms: number): void;
+  /** freeze time; resuming never applies the paused span */
+  setPaused(paused: boolean): void;
+  /** live time multiplier (x1..x10) — never applied to offline catch-up */
+  setSpeed(speed: number): void;
   current(): SimState | null;
 }
+
+/** spans longer than this are offline catch-up — speed never multiplies them */
+const LIVE_SPAN_MS = 5000;
 
 const DEFAULT_STEP_MS = 500;
 
@@ -47,14 +54,18 @@ export function createGameLoop(
   let state: SimState | null = null;
   let lastWallMs = 0;
   let interval: ReturnType<typeof setInterval> | undefined;
+  let paused = false;
+  let speed = 1;
 
   const tickOnce = (): void => {
     if (!state) return;
     const wallNow = now();
     const elapsed = wallNow - lastWallMs;
     lastWallMs = wallNow;
-    if (elapsed <= 0) return;
-    const result = advanceSim(state, elapsed, env);
+    if (paused || elapsed <= 0) return;
+    // a long gap is offline catch-up: always real-time, never multiplied
+    const scaled = elapsed > LIVE_SPAN_MS ? elapsed : elapsed * speed;
+    const result = advanceSim(state, scaled, env);
     state = result.state;
     callbacks.onUpdate(state, result.events);
   };
@@ -99,6 +110,17 @@ export function createGameLoop(
       state = null;
     },
     tickOnce,
+    setPaused(value: boolean): void {
+      if (paused === value) return;
+      if (!value) {
+        // the paused span must not be replayed on resume
+        lastWallMs = now();
+      }
+      paused = value;
+    },
+    setSpeed(value: number): void {
+      speed = Math.max(1, value);
+    },
     advanceBy(ms: number): void {
       if (!state || ms <= 0) return;
       // chunked so the per-call catch-up clamp never truncates the jump

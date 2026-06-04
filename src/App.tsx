@@ -42,6 +42,8 @@ import {
   setSim,
   setSpeciesDiscovered,
   setTank,
+  setTimePaused,
+  setTimeSpeed,
   sim,
   speciesDiscovered,
   tank,
@@ -184,6 +186,9 @@ export default function App() {
       onHidden: () => void persist(),
     });
     loop.start(simState);
+    // time controls reset per world
+    setTimePaused(false);
+    setTimeSpeed(1);
 
     startTickers();
 
@@ -389,7 +394,11 @@ export default function App() {
           />
         </Show>
         <Show when={screen() === "playing" && sim() && tank()}>
-          <Hud onNewTank={() => void backToMenu()} />
+          <Hud
+            onNewTank={() => void backToMenu()}
+            onPauseChange={(paused) => loop?.setPaused(paused)}
+            onSpeedChange={(speed) => loop?.setSpeed(speed)}
+          />
           <Almanac />
         </Show>
         <Toasts />

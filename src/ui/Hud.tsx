@@ -1,18 +1,33 @@
 import { Show, createMemo, createSignal } from "solid-js";
 import { isMuted, setMuted } from "../audio/engine";
-import { IconBook, IconSprout, IconVolume, IconVolumeMuted } from "./icons";
+import {
+  IconBook,
+  IconFastForward,
+  IconPause,
+  IconPlay,
+  IconSprout,
+  IconVolume,
+  IconVolumeMuted,
+} from "./icons";
 import {
   PHASE_INFO,
+  SPEED_STEPS,
   formatSimAge,
   nextMilestone,
   setAlmanacOpen,
+  setTimePaused,
+  setTimeSpeed,
   almanacOpen,
   sim,
   tank,
+  timePaused,
+  timeSpeed,
 } from "./store";
 
 interface HudProps {
   onNewTank: () => void;
+  onPauseChange: (paused: boolean) => void;
+  onSpeedChange: (speed: number) => void;
 }
 
 const ARCHETYPE_LABEL: Record<string, string> = {
@@ -34,6 +49,21 @@ export default function Hud(props: HudProps) {
     const next = !muted();
     setMuted(next);
     setMutedSignal(next);
+  };
+
+  const togglePause = (): void => {
+    const next = !timePaused();
+    setTimePaused(next);
+    props.onPauseChange(next);
+  };
+
+  const cycleSpeed = (): void => {
+    const index = SPEED_STEPS.indexOf(
+      timeSpeed() as (typeof SPEED_STEPS)[number],
+    );
+    const next = SPEED_STEPS[(index + 1) % SPEED_STEPS.length];
+    setTimeSpeed(next);
+    props.onSpeedChange(next);
   };
 
   return (
@@ -58,6 +88,28 @@ export default function Hud(props: HudProps) {
               </>
             )}
           </Show>
+        </div>
+        <div class="hud-time-controls">
+          <button
+            type="button"
+            class="hud-button hud-button-icon"
+            classList={{ active: timePaused() }}
+            onClick={togglePause}
+            title={timePaused() ? "Resume time" : "Pause time"}
+            aria-label={timePaused() ? "Resume time" : "Pause time"}
+          >
+            {timePaused() ? <IconPlay /> : <IconPause />}
+          </button>
+          <button
+            type="button"
+            class="hud-button"
+            classList={{ active: timeSpeed() > 1 }}
+            onClick={cycleSpeed}
+            title="Time speed"
+            aria-label={`Time speed x${timeSpeed()}`}
+          >
+            <IconFastForward /> x{timeSpeed()}
+          </button>
         </div>
         <div class="hud-actions">
           <button

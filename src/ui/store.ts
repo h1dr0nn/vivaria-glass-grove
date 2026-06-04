@@ -185,10 +185,22 @@ export function nextMilestone(
   }
 }
 
-/** "Day 3 · 14h" from sim time. */
+/** "Day 3 · 04:12:36" from sim time — a clock the player can watch run. */
 export function formatSimAge(simTimeMs: number): string {
-  const hours = Math.floor(simTimeMs / 3_600_000);
-  const days = Math.floor(hours / 24);
-  if (days <= 0) return `${Math.max(0, hours)}h`;
-  return `Day ${days + 1} · ${hours % 24}h`;
+  const totalSeconds = Math.max(0, Math.floor(simTimeMs / 1000));
+  const seconds = totalSeconds % 60;
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const hours = Math.floor(totalSeconds / 3600) % 24;
+  const days = Math.floor(totalSeconds / 86_400);
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  const clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return days <= 0 ? clock : `Day ${days + 1} · ${clock}`;
 }
+
+/** Time controls — session-level, wired to the game loop by App. */
+export const SPEED_STEPS = [1, 2, 3, 5, 10] as const;
+
+const [timePaused, setTimePaused] = createSignal(false);
+const [timeSpeed, setTimeSpeed] = createSignal<number>(SPEED_STEPS[0]);
+
+export { timePaused, setTimePaused, timeSpeed, setTimeSpeed };

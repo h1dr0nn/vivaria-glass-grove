@@ -83,6 +83,46 @@ describe("createGameLoop", () => {
     expect(loop.current()).toBeNull();
   });
 
+  test("pause freezes time and resume never replays the paused span", () => {
+    const clock = makeClock(0);
+    const loop = createGameLoop(
+      ENV,
+      { onUpdate: () => undefined },
+      { now: clock.now, bindVisibility: false },
+    );
+    const initial = createInitialSimState(42);
+    loop.start(initial);
+    loop.setPaused(true);
+    clock.advance(2 * HOUR_MS);
+    loop.tickOnce();
+    expect(loop.current()).toEqual(initial); // frozen
+    loop.setPaused(false);
+    clock.advance(1000);
+    loop.tickOnce();
+    // only the 1s after resume applies, never the 2h paused span
+    expect(loop.current()!.simTimeMs).toBe(1000);
+    loop.stop();
+  });
+
+  test("speed multiplies live ticks but never offline catch-up", () => {
+    const clock = makeClock(0);
+    const loop = createGameLoop(
+      ENV,
+      { onUpdate: () => undefined },
+      { now: clock.now, bindVisibility: false },
+    );
+    loop.start(createInitialSimState(42));
+    loop.setSpeed(10);
+    clock.advance(1000);
+    loop.tickOnce();
+    expect(loop.current()!.simTimeMs).toBe(10_000); // x10 live
+    clock.advance(HOUR_MS); // a long hidden gap
+    loop.tickOnce();
+    // catch-up applied at real time, not x10
+    expect(loop.current()!.simTimeMs).toBe(10_000 + HOUR_MS);
+    loop.stop();
+  });
+
   test("events from a long catch-up reach the callback", () => {
     const clock = makeClock(0);
     const allEvents: string[] = [];
