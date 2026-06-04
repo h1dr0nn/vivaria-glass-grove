@@ -5,7 +5,7 @@ import type { EnvSummary } from "../types";
  * y = row 0..height-1 measured from the BOTTOM of the tank upward.
  */
 
-export const GEN_VERSION = 7; // v7: driftwood rests on flat ground only
+export const GEN_VERSION = 8; // v8: driftwood always fully inside the glass
 
 export const MATERIAL = {
   air: 0,

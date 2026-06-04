@@ -105,20 +105,16 @@ export default function App() {
 
   // ambient + autosave timers exist ONLY while playing AND visible —
   // a hidden window must cost zero timer wakeups (idle-CPU contract).
-  // Reduced-motion preference softens motion (slower ambient, no slosh)
-  // but never freezes the water — gentle life IS the product.
-  const prefersReducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
-
+  // NOTE: the OS reduced-motion flag is deliberately ignored — it silently
+  // froze the requested water motion on real machines. If needed later,
+  // motion belongs behind an IN-GAME setting, never an invisible OS flag.
   const startTickers = (): void => {
     clearInterval(ambientInterval);
-    const stepMs = prefersReducedMotion ? AMBIENT_STEP_MS * 3 : AMBIENT_STEP_MS;
     ambientInterval = setInterval(() => {
       if (!view) return;
       view.tick(performance.now());
       markDirty();
-    }, stepMs);
+    }, AMBIENT_STEP_MS);
     clearInterval(autosaveInterval);
     autosaveInterval = setInterval(() => void persist(), AUTOSAVE_MS);
   };
@@ -192,17 +188,14 @@ export default function App() {
     startTickers();
 
     // dragging the window sloshes the water — cozy juice
-    // (skipped under prefers-reduced-motion)
     motionTracker?.dispose();
-    motionTracker = prefersReducedMotion
-      ? undefined
-      : createWindowMotionTracker({
-          onImpulse: (ax, ay) => {
-            if (!view || document.visibilityState !== "visible") return;
-            view.applyWindowImpulse(ax, ay);
-            startSettleLoop();
-          },
-        });
+    motionTracker = createWindowMotionTracker({
+      onImpulse: (ax, ay) => {
+        if (!view || document.visibilityState !== "visible") return;
+        view.applyWindowImpulse(ax, ay);
+        startSettleLoop();
+      },
+    });
 
     startAmbient({
       waterAmount: newTank.env.waterFraction,

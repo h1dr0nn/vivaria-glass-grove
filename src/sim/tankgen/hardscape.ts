@@ -38,13 +38,18 @@ export function placeHardscape(
     }
   }
   for (let w = 0; w < woodCount; w++) {
-    const make = (x: number): HardscapePiece => ({
-      kind: "driftwood" as const,
-      x,
-      y: terrain[x] + 1,
-      halfWidth: 8 + Math.floor(rng() * 7),
-      halfHeight: 1 + Math.floor(rng() * 2),
-    });
+    const make = (x: number): HardscapePiece => {
+      const halfWidth = 8 + Math.floor(rng() * 7);
+      // the log must rest fully INSIDE the glass — never through a wall
+      const cx = Math.min(width - 2 - halfWidth, Math.max(halfWidth + 2, x));
+      return {
+        kind: "driftwood" as const,
+        x: cx,
+        y: terrain[cx] + 1,
+        halfWidth,
+        halfHeight: 1 + Math.floor(rng() * 2),
+      };
+    };
     const pickFrom = flatNearShore.length > 0 ? flatNearShore : flatAnywhere;
     let piece = tryPlace(
       rng,

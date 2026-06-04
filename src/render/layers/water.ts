@@ -87,10 +87,10 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
     const baseY = screenY(layout, waterlineY);
     const tiltSpan = slosh ? Math.tan(slosh.tilt) * layout.tankWidthPx : 0;
     const amplitude =
-      layout.scale * 0.22 + (slosh?.wave ?? 0) * layout.scale * 0.9;
+      layout.scale * 0.3 + (slosh?.wave ?? 0) * layout.scale * 0.9;
     const phaseShift = slosh ? -slosh.waveDirection * slosh.wave * 2.5 : 0;
-    // at rest the water still breathes — a slow, tiny rise and fall
-    const breath = Math.sin(phase * 0.45) * layout.scale * 0.08;
+    // at rest the water still breathes — a slow, visible rise and fall
+    const breath = Math.sin(phase * 0.45) * layout.scale * 0.15;
     const bob = (slosh?.bob ?? 0) * layout.scale * 0.45 + breath;
 
     const frontY = (x: number): number =>
@@ -98,12 +98,13 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
       (x / width - 0.5) * tiltSpan +
       bob +
       Math.sin(phase + phaseShift + x * 0.22) * amplitude;
-    // the far edge sways a touch less and lags — cheap parallax
+    // the far edge lags slightly behind — cheap parallax, but it must
+    // move JUST as visibly as the near edge (sub-pixel sway reads as frozen)
     const backY = (x: number): number =>
       baseY +
-      (x / width - 0.5) * tiltSpan * 0.75 +
-      bob * 0.8 +
-      Math.sin(phase + phaseShift + x * 0.22 + 0.9) * amplitude * 0.55 +
+      (x / width - 0.5) * tiltSpan * 0.8 +
+      bob * 0.85 +
+      Math.sin(phase + phaseShift + x * 0.22 + 0.9) * amplitude * 0.8 +
       layout.depthY;
 
     for (const run of bandRuns) {

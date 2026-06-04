@@ -148,6 +148,20 @@ describe("generateTank — grid consistency", () => {
     }
   });
 
+  test("driftwood never pokes through the glass walls", () => {
+    for (const seed of [1, 31, 42, 123, 777, 20260604]) {
+      for (const land of [0, 25, 50, 75, 100]) {
+        const tank = generateTank(seed, land);
+        for (const piece of tank.hardscape) {
+          expect(piece.x - piece.halfWidth).toBeGreaterThanOrEqual(1);
+          expect(piece.x + piece.halfWidth).toBeLessThanOrEqual(
+            tank.width - 1,
+          );
+        }
+      }
+    }
+  });
+
   test("hardscape pieces exist and keep their distance", () => {
     const tank = generateTank(123, 40);
     expect(tank.hardscape.length).toBeGreaterThan(0);
