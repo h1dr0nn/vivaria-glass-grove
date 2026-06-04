@@ -5,7 +5,7 @@ import type { EnvSummary } from "../types";
  * y = row 0..height-1 measured from the BOTTOM of the tank upward.
  */
 
-export const GEN_VERSION = 6; // v6: hardscape is cosmetic, never stamped
+export const GEN_VERSION = 7; // v7: driftwood rests on flat ground only
 
 export const MATERIAL = {
   air: 0,

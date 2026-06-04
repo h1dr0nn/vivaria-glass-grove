@@ -43,55 +43,6 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
     }
     behind.addChild(body);
 
-    // the water-surface TOP FACE — the oblique band that says
-    // "you are looking slightly down onto open water". Only REAL open
-    // water gets one; noise puddles hiding behind the bank crest would
-    // otherwise paint floating pale boxes on the land.
-    const surfaceBand = new Graphics();
-    const bandGradient = new FillGradient({
-      type: "linear",
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      colorStops: [
-        { offset: 0, color: 0xbfe0e4 },
-        { offset: 1, color: SCENE.waterSurface },
-      ],
-      textureSpace: "local",
-    });
-    const isOpenWater = (run: WaterRun): boolean => {
-      if (run.end - run.start < 5) return false;
-      let deepest = Number.POSITIVE_INFINITY;
-      for (let x = run.start; x < run.end; x++) {
-        deepest = Math.min(deepest, tank.terrainHeight[x]);
-      }
-      return deepest <= waterlineY - 2;
-    };
-    for (const run of regions.filter(isOpenWater)) {
-      const top = screenY(layout, waterlineY);
-      const x0 = screenX(layout, run.start);
-      const x1 = screenX(layout, run.end);
-      // both edges recede with the shared depth vector — at the shore this
-      // diagonal meets the terrain's top ribbon (same projection language)
-      surfaceBand
-        .poly([
-          x0, top,
-          x1, top,
-          x1 + layout.depthX, top + layout.depthY,
-          x0 + layout.depthX, top + layout.depthY,
-        ])
-        .fill(bandGradient);
-      // specular streak along the far edge
-      surfaceBand
-        .moveTo(x0 + layout.depthX, top + layout.depthY)
-        .lineTo(x1 + layout.depthX, top + layout.depthY)
-        .stroke({
-          color: SCENE.surfaceLine,
-          alpha: 0.5,
-          width: Math.max(1, layout.scale * 0.2),
-        });
-    }
-    behind.addChild(surfaceBand);
-
     const tint = new Graphics();
     for (const run of regions) {
       tracePolygon(tint, tank, layout, run);
@@ -100,22 +51,89 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
     overlay.addChild(tint);
   }
 
+  // The whole visible surface — oblique top band, far specular, near line —
+  // is ONE living assembly, redrawn together every ambient tick: it breathes
+  // gently at rest and tilts/swells as a unit when the window is dragged.
+  const surfaceBand = new Graphics();
+  behind.addChild(surfaceBand); // under the substrate: shores occlude it
   const surfaceLine = new Graphics();
   overlay.addChild(surfaceLine);
 
+  const bandGradient = new FillGradient({
+    type: "linear",
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 1 },
+    colorStops: [
+      { offset: 0, color: 0xbfe0e4 },
+      { offset: 1, color: SCENE.waterSurface },
+    ],
+    textureSpace: "local",
+  });
+
+  // only REAL open water gets a top band (never noise puddles)
+  const bandRuns = waterRuns(tank).filter((run) => {
+    if (run.end - run.start < 5) return false;
+    let deepest = Number.POSITIVE_INFINITY;
+    for (let x = run.start; x < run.end; x++) {
+      deepest = Math.min(deepest, tank.terrainHeight[x]);
+    }
+    return deepest <= waterlineY - 2;
+  });
+
   const ripple = (phase: number, slosh?: SloshReading): void => {
+    surfaceBand.clear();
     surfaceLine.clear();
     if (waterlineY <= 0) return;
     const baseY = screenY(layout, waterlineY);
-    // slosh: the surface leans, the wave swells and sweeps with the motion
     const tiltSpan = slosh ? Math.tan(slosh.tilt) * layout.tankWidthPx : 0;
     const amplitude =
       layout.scale * 0.22 + (slosh?.wave ?? 0) * layout.scale * 0.9;
-    const phaseShift = slosh
-      ? -slosh.waveDirection * slosh.wave * 2.5
-      : 0;
-    const bob = (slosh?.bob ?? 0) * layout.scale * 0.45;
-    // draw only across open water — never through the emergent bank
+    const phaseShift = slosh ? -slosh.waveDirection * slosh.wave * 2.5 : 0;
+    // at rest the water still breathes — a slow, tiny rise and fall
+    const breath = Math.sin(phase * 0.45) * layout.scale * 0.08;
+    const bob = (slosh?.bob ?? 0) * layout.scale * 0.45 + breath;
+
+    const frontY = (x: number): number =>
+      baseY +
+      (x / width - 0.5) * tiltSpan +
+      bob +
+      Math.sin(phase + phaseShift + x * 0.22) * amplitude;
+    // the far edge sways a touch less and lags — cheap parallax
+    const backY = (x: number): number =>
+      baseY +
+      (x / width - 0.5) * tiltSpan * 0.75 +
+      bob * 0.8 +
+      Math.sin(phase + phaseShift + x * 0.22 + 0.9) * amplitude * 0.55 +
+      layout.depthY;
+
+    for (const run of bandRuns) {
+      const front: number[] = [];
+      const back: number[] = [];
+      for (let x = run.start; x <= run.end; x += 2) {
+        const cx = Math.min(x, run.end);
+        front.push(screenX(layout, cx), frontY(cx));
+      }
+      for (let x = run.end; x >= run.start; x -= 2) {
+        const cx = Math.max(x, run.start);
+        back.push(screenX(layout, cx) + layout.depthX, backY(cx));
+      }
+      surfaceBand.poly([...front, ...back]).fill(bandGradient);
+      // specular streak rides the far edge
+      for (let i = back.length - 2; i >= 0; i -= 2) {
+        if (i === back.length - 2) {
+          surfaceBand.moveTo(back[i], back[i + 1]);
+        } else {
+          surfaceBand.lineTo(back[i], back[i + 1]);
+        }
+      }
+      surfaceBand.stroke({
+        color: SCENE.surfaceLine,
+        alpha: 0.5,
+        width: Math.max(1, layout.scale * 0.2),
+      });
+    }
+
+    // near waterline — drawn over the tint, across ALL water columns
     let penDown = false;
     for (let x = 0; x <= width; x += 2) {
       const column = Math.min(width - 1, x);
@@ -124,9 +142,7 @@ export function buildWater(tank: TankState, layout: TankLayout): WaterLayer {
         penDown = false;
         continue;
       }
-      const lean = (x / width - 0.5) * tiltSpan;
-      const y =
-        baseY + lean + bob + Math.sin(phase + phaseShift + x * 0.22) * amplitude;
+      const y = frontY(x);
       if (!penDown) {
         surfaceLine.moveTo(screenX(layout, x), y);
         penDown = true;

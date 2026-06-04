@@ -152,56 +152,85 @@ function buildHardscapeShapes(tank: TankState, layout: TankLayout): Container {
   const container = new Container();
   for (const piece of tank.hardscape) {
     if (piece.kind === "driftwood") {
-      container.addChild(buildDriftwood(tank, layout, piece));
+      container.addChild(buildDriftwood(layout, piece));
     }
   }
   return container;
 }
 
 function buildDriftwood(
-  tank: TankState,
   layout: TankLayout,
   piece: HardscapePiece,
 ): Graphics {
   const g = new Graphics();
   const rx = piece.halfWidth * layout.scale;
   const ry = Math.max(piece.halfHeight * layout.scale, layout.scale * 1.1);
+  const flip = piece.x % 2 === 0 ? 1 : -1; // mirror variety per placement
 
-  // local coords: origin at the log's center
-  g.ellipse(0, ry * 0.7, rx * 0.9, ry * 0.28).fill({
+  // soft contact shadow
+  g.ellipse(0, ry * 0.55, rx * 0.92, ry * 0.3).fill({
     color: SCENE.soilDark,
     alpha: 0.28,
   });
-  g.roundRect(-rx, -ry * 0.55, rx * 2, ry * 1.1, ry * 0.5).fill(SCENE.wood);
-  // underside shading
-  g.roundRect(-rx * 0.96, ry * 0.05, rx * 1.92, ry * 0.45, ry * 0.25).fill({
-    color: SCENE.woodDark,
-    alpha: 0.6,
-  });
-  // grain lines
-  for (let i = 0; i < 3; i++) {
-    const ly = -ry * 0.3 + i * ry * 0.28;
-    g.moveTo(-rx * (0.8 - i * 0.1), ly)
-      .lineTo(rx * (0.75 - i * 0.12), ly)
-      .stroke({
-        color: SCENE.woodDark,
-        alpha: 0.5,
-        width: Math.max(0.8, layout.scale * 0.12),
-      });
+
+  // trunk: a tapered organic body (fat end → thin end), not a plank
+  const trunk: number[] = [];
+  const SEGMENTS = 10;
+  for (let i = 0; i <= SEGMENTS; i++) {
+    const t = i / SEGMENTS;
+    const px = (-rx + t * 2 * rx) * flip;
+    const thickness = ry * (0.62 - t * 0.22) * (1 + Math.sin(t * 9) * 0.07);
+    trunk.push(px, -thickness);
   }
-  // a worn end cap
-  g.ellipse(rx * 0.92, -ry * 0.05, ry * 0.32, ry * 0.4).fill({
+  for (let i = SEGMENTS; i >= 0; i--) {
+    const t = i / SEGMENTS;
+    const px = (-rx + t * 2 * rx) * flip;
+    const thickness = ry * (0.62 - t * 0.22) * (1 + Math.cos(t * 7) * 0.06);
+    trunk.push(px, thickness * 0.75);
+  }
+  g.poly(trunk).fill(SCENE.wood);
+
+  // a broken branch stub reaching up from the fat end
+  const stubX = -rx * 0.45 * flip;
+  g.poly([
+    stubX, -ry * 0.4,
+    stubX + ry * 0.55 * flip, -ry * 1.5,
+    stubX + ry * 0.95 * flip, -ry * 1.35,
+    stubX + ry * 0.5 * flip, -ry * 0.25,
+  ]).fill(SCENE.wood);
+  g.ellipse(stubX + ry * 0.72 * flip, -ry * 1.4, ry * 0.18, ry * 0.12).fill({
     color: SCENE.woodDark,
-    alpha: 0.8,
+    alpha: 0.85,
   });
 
-  // settle onto the bank: position at the surface, lean with the slope
-  const left = Math.max(0, piece.x - piece.halfWidth);
-  const right = Math.min(tank.width - 1, piece.x + piece.halfWidth);
-  const rise =
-    (tank.terrainHeight[right] - tank.terrainHeight[left]) * layout.scale;
-  const run = (right - left) * layout.scale;
-  g.rotation = run > 0 ? -Math.atan2(rise, run) : 0;
+  // underside in shadow
+  g.poly([
+    -rx * flip, 0,
+    rx * flip, ry * 0.1,
+    rx * 0.95 * flip, ry * 0.42,
+    -rx * 0.95 * flip, ry * 0.5,
+  ]).fill({ color: SCENE.woodDark, alpha: 0.55 });
+
+  // cut-ring on the fat end
+  g.ellipse(-rx * 0.97 * flip, -ry * 0.05, ry * 0.22, ry * 0.45).fill(
+    SCENE.woodDark,
+  );
+  g.ellipse(-rx * 0.97 * flip, -ry * 0.05, ry * 0.1, ry * 0.22).fill({
+    color: SCENE.wood,
+    alpha: 0.7,
+  });
+
+  // moss settling on the upper side — an old log belongs to the scene
+  g.ellipse(-rx * 0.15 * flip, -ry * 0.55, rx * 0.2, ry * 0.28).fill({
+    color: SCENE.moss,
+    alpha: 0.85,
+  });
+  g.ellipse(rx * 0.3 * flip, -ry * 0.42, rx * 0.13, ry * 0.2).fill({
+    color: SCENE.leafLight,
+    alpha: 0.5,
+  });
+
+  // rests level on flat ground (placement guarantees flatness)
   g.position.set(screenX(layout, piece.x + 0.5), screenY(layout, piece.y));
   return g;
 }

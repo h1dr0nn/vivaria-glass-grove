@@ -21,14 +21,22 @@ export function placeHardscape(
   const rng = mulberry32(splitSeed(seed, STREAMS.hardscape));
   const pieces: HardscapePiece[] = [];
 
-  // driftwood lies ALONG the bank (rendered rotated to the slope), so only
-  // true cliffs are rejected (rocks were cut by design review)
+  // a log on a steep bank reads as a plank/ramp — driftwood only rests on
+  // genuinely FLAT ground (basin floor, beach flat, hilltop)
   const isValid = (piece: HardscapePiece): boolean =>
     piece.y + piece.halfHeight < usableHeight &&
-    slopeAcross(terrain, piece.x, piece.halfWidth) <= piece.halfWidth * 2.5;
+    slopeAcross(terrain, piece.x, piece.halfWidth) <= 3;
 
   const woodCount = rng() < 0.65 ? 1 : 2;
-  const shoreColumns = collectShoreColumns(terrain, waterlineY, width);
+  const flatNearShore: number[] = [];
+  const flatAnywhere: number[] = [];
+  for (let x = 10; x < width - 10; x++) {
+    if (slopeAcross(terrain, x, 10) > 3) continue;
+    flatAnywhere.push(x);
+    if (waterlineY > 0 && Math.abs(terrain[x] - waterlineY) <= 6) {
+      flatNearShore.push(x);
+    }
+  }
   for (let w = 0; w < woodCount; w++) {
     const make = (x: number): HardscapePiece => ({
       kind: "driftwood" as const,
@@ -37,11 +45,17 @@ export function placeHardscape(
       halfWidth: 8 + Math.floor(rng() * 7),
       halfHeight: 1 + Math.floor(rng() * 2),
     });
-    const pickFrom = shoreColumns.length > 0 ? shoreColumns : null;
-    let piece = tryPlace(rng, pieces, width, make, pickFrom, isValid);
-    if (!piece && pickFrom) {
-      // shore too steep everywhere — let the log rest anywhere sane
-      piece = tryPlace(rng, pieces, width, make, null, isValid);
+    const pickFrom = flatNearShore.length > 0 ? flatNearShore : flatAnywhere;
+    let piece = tryPlace(
+      rng,
+      pieces,
+      width,
+      make,
+      pickFrom.length > 0 ? pickFrom : null,
+      isValid,
+    );
+    if (!piece && pickFrom === flatNearShore && flatAnywhere.length > 0) {
+      piece = tryPlace(rng, pieces, width, make, flatAnywhere, isValid);
     }
     if (piece) pieces.push(piece);
   }
@@ -64,19 +78,6 @@ function slopeAcross(
     max = Math.max(max, terrain[i]);
   }
   return max - min;
-}
-
-function collectShoreColumns(
-  terrain: readonly number[],
-  waterlineY: number,
-  width: number,
-): number[] {
-  if (waterlineY <= 0) return [];
-  const columns: number[] = [];
-  for (let x = 8; x < width - 8; x++) {
-    if (Math.abs(terrain[x] - waterlineY) <= 4) columns.push(x);
-  }
-  return columns;
 }
 
 function tryPlace(
