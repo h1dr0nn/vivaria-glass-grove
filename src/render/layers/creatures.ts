@@ -421,7 +421,9 @@ function moveAmble(
     }
   }
   if (c.extra === 0) {
-    c.x += c.dir * c.speed * dt * 0.35;
+    // the heron wades noticeably faster than a turtle ambles
+    const pace = c.def.id === "heron" ? 0.9 : 0.35;
+    c.x += c.dir * c.speed * dt * pace;
     if (c.x < range.start + margin || c.x > range.end - margin) c.dir *= -1;
     c.x = Math.min(range.end - margin, Math.max(range.start + margin, c.x));
   }
@@ -550,9 +552,16 @@ function animate(
       break;
     }
     case "heron": {
-      // a slow, occasional head-tilt — otherwise statue-still
+      // a patient hunter: slow neck sway, then an occasional sharp STRIKE —
+      // the head/neck plunges toward the water and lifts back up
       if (parts.head) {
-        parts.head.rotation = Math.sin(time * 0.3 + c.phase) * 0.18;
+        const s = layout.scale * c.def.size;
+        const cyclePos = (time * 0.18 + c.phase) % 1;
+        const strike =
+          cyclePos > 0.85 ? Math.sin(((cyclePos - 0.85) / 0.15) * Math.PI) : 0;
+        parts.head.position.y = -s * 1.2 + strike * s * 1.1;
+        parts.head.rotation =
+          Math.sin(time * 0.5 + c.phase) * 0.12 + strike * 0.5 * c.dir;
       }
       break;
     }

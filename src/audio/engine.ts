@@ -14,10 +14,13 @@ interface AmbientProfile {
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let ambientNodes: AudioNode[] = [];
+let rainGain: GainNode | null = null;
+let rainNodes: AudioNode[] = [];
 let dropletTimer: ReturnType<typeof setTimeout> | undefined;
 let muted = false;
 
 const MASTER_VOLUME = 0.16;
+const RAIN_VOLUME = 0.5;
 const MUTE_KEY = "vivaria-muted";
 
 function ensureContext(): AudioContext | null {
@@ -171,6 +174,54 @@ function stopAmbientNodes(): void {
 
 export function stopAmbient(): void {
   stopAmbientNodes();
+  setRaining(false);
+}
+
+/**
+ * Fade a soft rain hiss in/out — a wash of filtered noise that follows the
+ * weather. Called by the app when the current day turns rainy/dry.
+ */
+export function setRaining(active: boolean): void {
+  const context = ensureContext();
+  if (!context || !master) return;
+  if (active) {
+    if (rainGain) return; // already raining
+    void context.resume();
+    rainGain = context.createGain();
+    rainGain.gain.setValueAtTime(0, context.currentTime);
+    rainGain.gain.linearRampToValueAtTime(RAIN_VOLUME, context.currentTime + 2.5);
+    rainGain.connect(master);
+    // two noise layers: a low patter + an airy hiss, gently breathing
+    rainNodes = [
+      ...makeNoiseLayer(context, rainGain, "lowpass", 1400, 0.4, 0.6, 0.4),
+      ...makeNoiseLayer(context, rainGain, "highpass", 4200, 0.18, 0.9, 0.5),
+    ];
+  } else {
+    if (!rainGain) return;
+    const g = rainGain;
+    const nodes = rainNodes;
+    g.gain.cancelScheduledValues(context.currentTime);
+    g.gain.linearRampToValueAtTime(0, context.currentTime + 1.5);
+    rainGain = null;
+    rainNodes = [];
+    window.setTimeout(() => {
+      for (const node of nodes) {
+        try {
+          if (node instanceof AudioBufferSourceNode || node instanceof OscillatorNode) {
+            node.stop();
+          }
+          node.disconnect();
+        } catch {
+          // already stopped
+        }
+      }
+      try {
+        g.disconnect();
+      } catch {
+        // already gone
+      }
+    }, 1800);
+  }
 }
 
 /** Warm two-partial chime - discoveries and milestones. */

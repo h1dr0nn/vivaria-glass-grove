@@ -19,11 +19,6 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function smoothstep(t: number): number {
-  const c = Math.min(1, Math.max(0, t));
-  return c * c * (3 - 2 * c);
-}
-
 /**
  * STEPS 1–2 - terrain + waterline.
  *
@@ -47,75 +42,143 @@ export function generateTerrain(
     p >= 1 ? 0 : Math.round(usableHeight * lerp(0.52, 0.1, p));
   const waterDepth = usableHeight * lerp(0.42, 0.16, p);
   const basinFloor = Math.max(2, Math.round(waterlineY - waterDepth));
-  // land sits only modestly above the waterline — a low bank that reads as
-  // a shore, not a towering cliff over the pond (user: "đất quá cao so với nước")
+  // Low bank in MIXED tanks (so it reads as a shore, not a cliff over the
+  // pond) but still tall in land-dominant tanks (which need real highland).
+  const landRelief = 0.12 + 0.42 * p ** 1.4;
   const landTop = Math.min(
     usableHeight - 4,
-    Math.round(waterlineY + usableHeight * lerp(0.1, 0.32, p)),
+    Math.round(waterlineY + usableHeight * landRelief),
   );
 
+  // ----- LAYOUT: roll FIRST (determinism), pick from those that fit p -----
+  const layoutRoll = rng();
+  const layout = pickLayout(layoutRoll, p);
+
   const landOnRight = rng() < 0.5;
-  const edge = 1 - p; // land occupies u > edge
-  // Slope PERSONALITY: every world rolls its own bank, from a definite
-  // climb (factor ~1.2) to a long amble-able beach (factor ~4.5) - the old
-  // narrow 1.3–1.8 roll made every world equally steep.
-  const heightDelta = Math.max(1, landTop - basinFloor);
   const slopeFactor = 1.2 + rng() ** 1.4 * 3.3;
-  const slopeColumns = heightDelta * slopeFactor;
-  const blend = Math.min(0.55, Math.max(0.12, slopeColumns / width));
+  const heightDelta = Math.max(1, landTop - basinFloor);
   const amplitude = lerp(0.04, 0.085, p) * usableHeight;
   const frequency = 0.02 + rng() * 0.014;
   const noiseSeed = splitSeed(seed, STREAMS.terrain) ^ 0x5bd1e995;
 
+  // Pick the EXACT land columns per layout (count = round(p·width)) so the
+  // emergent-land fraction equals p by construction, whatever the shape.
+  const landCols = Math.round(p * width);
+  const landMask = buildLandMask(layout, width, landCols, landOnRight);
+
+  // height comes from the signed distance to the nearest shore boundary: land
+  // columns climb from the waterline up to landTop, water columns fall to the
+  // basin — a real beach slope whose steepness is the per-world slopeFactor.
+  const boundaries: number[] = [];
+  for (let x = 1; x < width; x++) {
+    if (landMask[x] !== landMask[x - 1]) boundaries.push(x - 0.5);
+  }
+  const reliefScale = layout === "beach" ? 0.55 : 1;
+  // the bank can be gentle (esp. a beach), but the pond still drops to its
+  // floor within ~1.5× its depth so deep water actually exists
+  const bankCols = Math.min(
+    width * 0.4,
+    Math.max(3, heightDelta * slopeFactor * (layout === "beach" ? 2.2 : 1)),
+  );
+  const landRise = ((landTop - waterlineY) * reliefScale) / bankCols;
+  const waterDepthCells = Math.max(1, waterlineY - basinFloor);
+  const waterCols = Math.max(3, waterDepthCells * 1.5);
+  const waterFall = waterDepthCells / waterCols;
+
   const terrainHeight: number[] = new Array<number>(width);
   for (let x = 0; x < width; x++) {
-    const t = x / (width - 1);
-    const u = landOnRight ? t : 1 - t;
-    const bias = p <= 0 ? 0 : smoothstep((u - edge) / blend + 0.5);
-    // rolling hills on land, calmer floor under water
-    const n = (fbm1D(noiseSeed, x * frequency) * 2 - 1) * (0.45 + 0.75 * bias);
-    const h = Math.round(
-      basinFloor + bias * (landTop - basinFloor) + n * amplitude,
-    );
-    terrainHeight[x] = Math.min(usableHeight - 4, Math.max(2, h));
+    let dist = width;
+    for (const b of boundaries) dist = Math.min(dist, Math.abs(x - b));
+    if (boundaries.length === 0) dist = width; // all land or all water
+    const damp = Math.min(1, dist / 2); // don't let noise flip shore columns
+    const n = (fbm1D(noiseSeed, x * frequency) * 2 - 1) * amplitude * damp;
+    let h: number;
+    if (landMask[x]) {
+      h = Math.min(landTop, waterlineY + 0.6 + dist * landRise) + n;
+    } else {
+      h = Math.max(basinFloor, waterlineY - 0.6 - dist * waterFall) + n * 0.5;
+    }
+    terrainHeight[x] = Math.min(usableHeight - 4, Math.max(2, Math.round(h)));
   }
 
-  fillHiddenPockets(terrainHeight, waterlineY);
+  killNoisePockets(terrainHeight, waterlineY, Math.max(4, Math.floor(width * 0.04)));
 
   return { terrainHeight, waterlineY };
 }
 
-/**
- * ONE clean body of water: noise can dip land columns back below the
- * waterline behind the bank crest, creating hidden pocket-ponds that render
- * as glitchy pale patches inside the hill. Keep only the widest water run;
- * raise every other pocket just above the waterline (it reads as a berm).
- */
-function fillHiddenPockets(terrain: number[], waterlineY: number): void {
-  if (waterlineY <= 0) return;
-  interface Run {
-    start: number;
-    end: number;
+/** exact land/water column assignment per layout (land count fixed = landCols) */
+function buildLandMask(
+  layout: TerrainLayout,
+  width: number,
+  landCols: number,
+  landOnRight: boolean,
+): boolean[] {
+  const mask = new Array<boolean>(width).fill(false);
+  if (landCols <= 0) return mask;
+  if (landCols >= width) return mask.fill(true);
+  switch (layout) {
+    case "central-pond": {
+      // land on both edges, water in the middle
+      const left = Math.floor(landCols / 2);
+      const right = landCols - left;
+      for (let x = 0; x < width; x++) {
+        mask[x] = x < left || x >= width - right;
+      }
+      break;
+    }
+    case "island": {
+      // land in the middle, water both sides
+      const start = Math.floor((width - landCols) / 2);
+      for (let x = start; x < start + landCols; x++) mask[x] = true;
+      break;
+    }
+    default: {
+      // single bank / beach — land on one seeded side
+      for (let i = 0; i < landCols; i++) {
+        mask[landOnRight ? width - 1 - i : i] = true;
+      }
+      break;
+    }
   }
-  const runs: Run[] = [];
+  return mask;
+}
+
+export type TerrainLayout =
+  | "single-bank"
+  | "central-pond"
+  | "island"
+  | "beach";
+
+/** Seeded layout choice — central-pond/island need both land & water present. */
+function pickLayout(roll: number, p: number): TerrainLayout {
+  const eligible: TerrainLayout[] = ["single-bank", "beach"];
+  if (p >= 0.2 && p <= 0.8) {
+    eligible.push("central-pond", "island");
+  }
+  return eligible[Math.floor(roll * eligible.length) % eligible.length];
+}
+
+/**
+ * Kill only TINY noise puddles (genuine fBm dips behind a crest that read as
+ * glitchy pale patches) while keeping every REAL pool. Layouts like central-
+ * pond / twin pools intentionally have multiple water bodies, so we berm only
+ * runs narrower than minRunCols and leave the rest alone.
+ */
+function killNoisePockets(
+  terrain: number[],
+  waterlineY: number,
+  minRunCols: number,
+): void {
+  if (waterlineY <= 0) return;
   let start = -1;
   for (let x = 0; x <= terrain.length; x++) {
     const isWater = x < terrain.length && terrain[x] < waterlineY;
     if (isWater && start < 0) start = x;
     if (!isWater && start >= 0) {
-      runs.push({ start, end: x });
+      if (x - start < minRunCols) {
+        for (let k = start; k < x; k++) terrain[k] = waterlineY + 1;
+      }
       start = -1;
-    }
-  }
-  if (runs.length <= 1) return;
-  let main = runs[0];
-  for (const run of runs) {
-    if (run.end - run.start > main.end - main.start) main = run;
-  }
-  for (const run of runs) {
-    if (run === main) continue;
-    for (let x = run.start; x < run.end; x++) {
-      terrain[x] = waterlineY + 1;
     }
   }
 }

@@ -18,9 +18,11 @@ import {
   bindAudioVisibility,
   loadMutePreference,
   playChime,
+  setRaining,
   startAmbient,
   stopAmbient,
 } from "./audio/engine";
+import { environmentAt } from "./sim/ecology";
 import { createStorage } from "./persistence/storage";
 import { buildSave, parseSave, restoreSim } from "./persistence/saves";
 import type { SaveData } from "./persistence/saveSchema";
@@ -187,6 +189,9 @@ export default function App() {
     const arrivals = recordSightings(population, simState.simTimeMs);
     announceDiscoveries([...milestones, ...arrivals]);
     view?.update(simState, population);
+    // rain sound follows the weather
+    const weather = environmentAt(simState.seed, simState.simTimeMs).weather;
+    setRaining(weather === "rainy" || weather === "muggy");
     markDirty();
     if (milestones.length > 0) playChime(true);
     else if (arrivals.length > 0) playChime(false);

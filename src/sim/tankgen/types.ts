@@ -5,7 +5,7 @@ import type { EnvSummary } from "../types";
  * y = row 0..height-1 measured from the BOTTOM of the tank upward.
  */
 
-export const GEN_VERSION = 10; // v10: per-world slope personality (gentle beaches exist)
+export const GEN_VERSION = 11; // v11: terrain layouts (central pond, island, beach)
 
 export const MATERIAL = {
   air: 0,
