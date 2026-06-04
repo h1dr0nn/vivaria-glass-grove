@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { advanceSim, createInitialSimState } from "./integrate";
 import { generateTank } from "./tankgen";
 import { DEFAULT_TUNABLES, type SimTunables } from "./tunables";
-import { SPECIES, populationFor } from "./species";
+import { SPECIES, populationFor, speciesById } from "./species";
 
 const HOUR_MS = 3_600_000;
 
@@ -30,6 +30,13 @@ describe("species roster sanity", () => {
   test("ids are unique", () => {
     const ids = new Set(SPECIES.map((s) => s.id));
     expect(ids.size).toBe(SPECIES.length);
+  });
+
+  test("speciesById resolves every roster id and rejects unknowns", () => {
+    for (const s of SPECIES) {
+      expect(speciesById(s.id)?.name).toBe(s.name);
+    }
+    expect(speciesById("krakenling")).toBeUndefined();
   });
 
   test("viability windows are valid", () => {
