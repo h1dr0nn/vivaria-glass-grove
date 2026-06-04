@@ -1,10 +1,14 @@
-import { createMemo, createSignal } from "solid-js";
+import { Show, createMemo, createSignal } from "solid-js";
 import TankPreview from "./TankPreview";
 import { archetypeOf } from "../sim/tankgen";
 import { mix32 } from "../sim/rng";
+import type { SaveData } from "../persistence/saveSchema";
+import { formatSimAge } from "./store";
 
 interface NewTankScreenProps {
   onStart: (seed: number, land: number) => void;
+  savedGame: SaveData | null;
+  onContinue: () => void;
 }
 
 const ARCHETYPE_COPY: Record<string, { name: string; blurb: string }> = {
@@ -44,12 +48,21 @@ function seedFromText(text: string): number {
 export default function NewTankScreen(props: NewTankScreenProps) {
   const [land, setLand] = createSignal(35);
   const [seedText, setSeedText] = createSignal("first jar");
+  const [confirmingReplace, setConfirmingReplace] = createSignal(false);
 
   const seed = createMemo(() => seedFromText(seedText()));
   const archetype = createMemo(() => ARCHETYPE_COPY[archetypeOf(land())]);
 
   const rollSeed = (): void => {
     setSeedText(String(Math.floor(Math.random() * 0xffffffff)));
+  };
+
+  const handleStart = (): void => {
+    if (props.savedGame && !confirmingReplace()) {
+      setConfirmingReplace(true);
+      return;
+    }
+    props.onStart(seed(), land());
   };
 
   return (
@@ -59,6 +72,23 @@ export default function NewTankScreen(props: NewTankScreenProps) {
           <h1 class="menu-title">Terarium</h1>
           <p class="menu-subtitle">grow a tiny world from nothing</p>
         </header>
+
+        <Show when={props.savedGame}>
+          {(save) => (
+            <button
+              type="button"
+              class="continue-card"
+              onClick={() => props.onContinue()}
+            >
+              <span class="continue-label">Continue your world</span>
+              <span class="continue-detail">
+                {ARCHETYPE_COPY[archetypeOf(save().landPercent)].name} ·{" "}
+                {formatSimAge(save().sim.simTimeMs)} · {save().landPercent}%
+                land
+              </span>
+            </button>
+          )}
+        </Show>
 
         <TankPreview seed={seed()} land={land()} />
 
@@ -105,9 +135,14 @@ export default function NewTankScreen(props: NewTankScreenProps) {
         <button
           type="button"
           class="grow-button"
-          onClick={() => props.onStart(seed(), land())}
+          classList={{ "grow-button-warning": confirmingReplace() }}
+          onClick={handleStart}
         >
-          Begin growing
+          {confirmingReplace()
+            ? "Replace your current world?"
+            : props.savedGame
+              ? "Start a new world"
+              : "Begin growing"}
         </button>
       </div>
     </div>

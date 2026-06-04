@@ -1,6 +1,7 @@
 import { createSignal } from "solid-js";
 import type { SimEvent, SimState, SuccessionPhase } from "../sim/types";
 import type { TankState } from "../sim/tankgen";
+import type { SaveData } from "../persistence/saveSchema";
 
 /** Central UI state — Solid signals, near-zero idle work. */
 
@@ -46,6 +47,8 @@ const [sim, setSim] = createSignal<SimState | null>(null);
 const [discoveries, setDiscoveries] = createSignal<readonly Discovery[]>([]);
 const [toasts, setToasts] = createSignal<readonly Toast[]>([]);
 const [almanacOpen, setAlmanacOpen] = createSignal(false);
+/** the save found on disk at startup (drives the Continue option) */
+const [savedGame, setSavedGame] = createSignal<SaveData | null>(null);
 
 export {
   screen,
@@ -55,9 +58,12 @@ export {
   sim,
   setSim,
   discoveries,
+  setDiscoveries,
   toasts,
   almanacOpen,
   setAlmanacOpen,
+  savedGame,
+  setSavedGame,
 };
 
 let nextToastId = 0;

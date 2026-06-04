@@ -48,6 +48,49 @@
   color: var(--color-text-faint);
 }
 
+.continue-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  background: oklch(38% 0.05 130 / 0.35);
+  border: 1px solid oklch(60% 0.08 130 / 0.5);
+  border-radius: var(--radius-soft);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out-soft),
+    background var(--duration-fast) var(--ease-out-soft);
+}
+
+.continue-card:hover {
+  background: oklch(42% 0.06 130 / 0.45);
+  border-color: oklch(70% 0.1 130 / 0.7);
+}
+
+.continue-label {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  color: var(--color-leaf);
+  letter-spacing: 0.04em;
+}
+
+.continue-detail {
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+}
+
+.grow-button-warning {
+  background: linear-gradient(
+    176deg,
+    oklch(76% 0.11 70),
+    oklch(66% 0.12 60)
+  );
+  box-shadow:
+    0 3px 10px oklch(35% 0.08 60 / 0.45),
+    inset 0 1px 0 oklch(90% 0.06 80 / 0.6);
+}
+
 .tank-preview {
   width: 100%;
   border-radius: 10px;

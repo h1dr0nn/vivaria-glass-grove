@@ -7,9 +7,9 @@ export default defineConfig({
     passWithNoTests: true,
     coverage: {
       provider: "v8",
-      // Coverage is enforced on pure logic (sim, persistence). The render/UI
-      // layers are verified visually (screenshots) per docs/ARCHITECTURE.md.
-      include: ["src/sim/**", "src/persistence/**"],
+      // Coverage is enforced on pure logic (sim, game loop, persistence).
+      // Render/UI layers are verified visually per docs/ARCHITECTURE.md.
+      include: ["src/sim/**", "src/persistence/**", "src/game/**"],
       exclude: ["src/**/*.test.ts"],
       thresholds: {
         lines: 80,
