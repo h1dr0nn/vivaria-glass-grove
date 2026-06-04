@@ -1,6 +1,7 @@
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import "./ui/tokens.css";
 import "./ui/app.css";
+import "./ui/titlebar.css";
 import "./ui/panels.css";
 import { createPixiApp, destroyPixiApp, getApp, markDirty } from "./render/pixiApp";
 import { buildTankView, type TankView } from "./render/tankRenderer";
@@ -23,6 +24,7 @@ import {
 import { createStorage } from "./persistence/storage";
 import { buildSave, parseSave, restoreSim } from "./persistence/saves";
 import type { SaveData } from "./persistence/saveSchema";
+import TitleBar from "./ui/TitleBar";
 import NewTankScreen from "./ui/NewTankScreen";
 import Hud from "./ui/Hud";
 import Almanac from "./ui/Almanac";
@@ -405,28 +407,31 @@ export default function App() {
 
   return (
     <div class="app-shell">
-      <div class="canvas-host" ref={host} />
-      <div class="ui-overlay" id="ui">
-        <Show when={screen() === "menu"}>
-          <NewTankScreen
-            ready={pixiReady()}
-            onStart={(seed, land) => startNewGame(seed, land)}
-            savedGame={savedGame()}
-            onContinue={() => {
-              const save = savedGame();
-              if (save) continueGame(save);
-            }}
-          />
-        </Show>
-        <Show when={screen() === "playing" && sim() && tank()}>
-          <Hud
-            onNewTank={() => void backToMenu()}
-            onPauseChange={(paused) => loop?.setPaused(paused)}
-            onSpeedChange={(speed) => loop?.setSpeed(speed)}
-          />
-          <Almanac />
-        </Show>
-        <Toasts />
+      <TitleBar />
+      <div class="app-body">
+        <div class="canvas-host" ref={host} />
+        <div class="ui-overlay" id="ui">
+          <Show when={screen() === "menu"}>
+            <NewTankScreen
+              ready={pixiReady()}
+              onStart={(seed, land) => startNewGame(seed, land)}
+              savedGame={savedGame()}
+              onContinue={() => {
+                const save = savedGame();
+                if (save) continueGame(save);
+              }}
+            />
+          </Show>
+          <Show when={screen() === "playing" && sim() && tank()}>
+            <Hud
+              onNewTank={() => void backToMenu()}
+              onPauseChange={(paused) => loop?.setPaused(paused)}
+              onSpeedChange={(speed) => loop?.setSpeed(speed)}
+            />
+            <Almanac />
+          </Show>
+          <Toasts />
+        </div>
       </div>
     </div>
   );

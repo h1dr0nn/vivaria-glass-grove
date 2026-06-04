@@ -103,3 +103,37 @@ export function IconSprout(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconMinus(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </Svg>
+  );
+}
+
+export function IconSquare(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+    </Svg>
+  );
+}
+
+export function IconRestore(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M4 16V6a2 2 0 0 1 2-2h10" />
+    </Svg>
+  );
+}
+
+export function IconX(props: IconProps) {
+  return (
+    <Svg size={props.size}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Svg>
+  );
+}

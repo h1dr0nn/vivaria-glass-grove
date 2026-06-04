@@ -52,4 +52,9 @@
 
   --radius-soft: 10px;
   --radius-pill: 999px;
+
+  /* Custom window decoration - same warm hue as the bg, a touch darker */
+  --color-titlebar: oklch(20% 0.016 75);
+  --color-titlebar-seam: oklch(15% 0.015 70);
+  --titlebar-height: 34px;
 }

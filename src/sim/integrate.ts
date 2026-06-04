@@ -1,4 +1,11 @@
 import { tickRandom } from "./rng";
+import {
+  createInitialEco,
+  presenceFor,
+  stepEco,
+  type EcoSpeciesId,
+  type EcoState,
+} from "./ecology";
 import { DEFAULT_TUNABLES, type SimTunables, type TierTunables } from "./tunables";
 import {
   PHASE_ORDER,
@@ -26,6 +33,7 @@ interface Draft {
   plants: number;
   nutrients: number;
   phase: SuccessionPhase;
+  eco: EcoState;
 }
 
 export function createInitialSimState(
@@ -42,6 +50,7 @@ export function createInitialSimState(
       plants: 0,
     },
     pools: { nutrients: 0 },
+    eco: createInitialEco(),
   };
 }
 
@@ -66,11 +75,14 @@ export function advanceSim(
     plants: state.scalars.plants,
     nutrients: state.pools.nutrients,
     phase: state.phase,
+    eco: state.eco ?? createInitialEco(),
   };
   const events: SimEvent[] = [];
+  // presence is a per-world constant (pure from seed+env) — compute once
+  const present = presenceFor(state.seed, env);
 
   for (let tick = firstTick; tick <= lastTick; tick++) {
-    runTick(draft, tick, state.seed, env, tunables, events);
+    runTick(draft, tick, state.seed, env, tunables, events, present);
   }
 
   return {
@@ -84,6 +96,7 @@ export function advanceSim(
         plants: draft.plants,
       },
       pools: { nutrients: draft.nutrients },
+      eco: draft.eco,
     },
     events,
   };
@@ -101,6 +114,7 @@ function runTick(
   env: EnvSummary,
   tunables: SimTunables,
   events: SimEvent[],
+  present: ReadonlySet<EcoSpeciesId>,
 ): void {
   const dtHours = tunables.tickMs / 3_600_000;
 
@@ -150,6 +164,22 @@ function runTick(
   }
 
   advancePhase(draft, tick, tunables, events);
+
+  // The living food web changes on a DAY timescale, so it steps once per
+  // sim-hour (on an absolute-tick boundary, so stepped===batched holds) —
+  // 3600× fewer iterations and a dt large enough for real boom-bust.
+  const ecoTicks = 3_600_000 / tunables.tickMs;
+  if (tick % ecoTicks === 0) {
+    draft.eco = stepEco(
+      draft.eco,
+      env,
+      { microbes: draft.microbes, algae: draft.algae, plants: draft.plants },
+      present,
+      seed,
+      1, // dtHours: one sim-hour per eco step
+      tick * tunables.tickMs,
+    );
+  }
 }
 
 interface GrowthStep {

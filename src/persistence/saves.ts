@@ -1,5 +1,6 @@
 import type { SimState, SuccessionPhase } from "../sim/types";
 import type { TankState } from "../sim/tankgen";
+import { createInitialEco, type EcoState } from "../sim/ecology";
 import { DEFAULT_TUNABLES, hashTunables } from "../sim/tunables";
 import { migrateSave } from "./migrations";
 import { CURRENT_SAVE_VERSION, saveSchema, type SaveData } from "./saveSchema";
@@ -30,6 +31,9 @@ export function buildSave(
       phase: sim.phase,
       scalars: { ...sim.scalars },
       pools: { ...sim.pools },
+      eco: sim.eco
+        ? { food: { ...sim.eco.food }, pop: { ...sim.eco.pop } }
+        : undefined,
     },
     discoveries: discoveries.map((d) => ({
       phase: d.phase,
@@ -70,5 +74,25 @@ export function restoreSim(save: SaveData): SimState {
     phase: save.sim.phase,
     scalars: { ...save.sim.scalars },
     pools: { ...save.sim.pools },
+    eco: save.sim.eco
+      ? restoreEco(save.sim.eco)
+      : undefined,
   };
+}
+
+/** Rebuild the canonical eco state, filling any absent ids from the roster. */
+function restoreEco(saved: {
+  food: Record<string, number>;
+  pop: Record<string, number>;
+}): EcoState {
+  const fresh = createInitialEco();
+  const food = { ...fresh.food } as Record<string, number>;
+  const pop = { ...fresh.pop } as Record<string, number>;
+  for (const id of Object.keys(food)) {
+    if (saved.food[id] !== undefined) food[id] = saved.food[id];
+  }
+  for (const id of Object.keys(pop)) {
+    if (saved.pop[id] !== undefined) pop[id] = saved.pop[id];
+  }
+  return { food, pop } as EcoState;
 }

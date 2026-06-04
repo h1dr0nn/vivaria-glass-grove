@@ -97,6 +97,32 @@ seed + landPercent
 - HMR: `import.meta.hot` dispose/rebuild hook for the Pixi app in the FIRST commit
   (GL context leak otherwise). Render layer is a pure reader of sim state.
 
+## Living food web (sim v2, 2026-06-04)
+
+Layered ON TOP of the v1 succession backbone (which stays the resource base —
+the golden-master still passes untouched). `src/sim/ecology.ts`, stepped from
+`integrate.ts` once per **sim-hour** (absolute-tick boundary ⇒ stepped===batched).
+
+- **Invisible food pools** (plankton/biofilm/detritus) the visible creatures eat;
+  **predation** between species (tetra→daphnia, frog→springtail…).
+- **Populations rise AND fall** over in-game days. Per the red-team's BLOCKER-2:
+  pools are DAMPED toward a stable equilibrium (Holling-III + refuge floors);
+  the visible boom-bust comes from EXOGENOUS season+weather forcing (bounded
+  sinusoids) — never from sitting on a Neimark-Sacker limit cycle. No extinction
+  spiral, no blowup, through any number of 24h catch-ups.
+- Per-hour rates, whole flux ×dtHours once, clamp arg ±3, then exp() ⇒ bounded
+  (BLOCKER-1). Detritus has linear decay so it self-regulates (BLOCKER-3).
+- **Per-world personality**: each species rolls present/absent + ±15% rate jitter,
+  pure from seed ⇒ two worlds with the same slider host a different cast.
+- Determinism: all summations iterate the FROZEN `ECO_SPECIES`/`FOOD_POOLS`
+  order (never object-key order); RNG on reserved tickRandom streams (≥3).
+- **Cozy floor (BLOCKER-4)**: a present species above its refuge floor always
+  renders ≥1 sprite — counts ebb, but a world never reads as "dead".
+- `eco` is live mutable state persisted in the save (not a pure fn of seed once
+  the sim has run); legacy v1 saves load with `eco` re-seeded.
+- DEFERRED to v2.1: rare events (algae bloom/firefly night/fog/leaf-fall),
+  cosmetic rare variants, journal boom/dip digest, Beddington interference.
+
 ## Persistence
 
 - JSON, zod-validated, written by **Rust** commands (`save_game`/`load_game`) to app-data

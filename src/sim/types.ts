@@ -2,6 +2,8 @@
  * Core simulation types. This module is PURE - no Pixi, no DOM, no Tauri.
  */
 
+import type { EcoState } from "./ecology";
+
 export type SuccessionPhase =
   | "sterile"
   | "microbes"
@@ -52,6 +54,8 @@ export interface SimState {
   readonly phase: SuccessionPhase;
   readonly scalars: SimScalars;
   readonly pools: SimPools;
+  /** living food web layered on the backbone (undefined only in legacy v1 saves) */
+  readonly eco?: EcoState;
 }
 
 export interface SimEvent {

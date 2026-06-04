@@ -1,0 +1,101 @@
+/*
+ * Custom window decoration: a slim draggable title bar themed a touch darker
+ * than the room behind the glass, plus invisible edge grips so the borderless
+ * window stays resizable.
+ */
+
+.titlebar {
+  flex: 0 0 var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-titlebar);
+  border-bottom: 1px solid var(--color-titlebar-seam);
+  padding-left: var(--space-3);
+  position: relative;
+  z-index: 40;
+  user-select: none;
+}
+
+/* Brand sits on the left; non-interactive so the whole left side drags. */
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+  color: var(--color-moss);
+}
+
+.titlebar-name {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+  color: var(--color-text-soft);
+}
+
+.titlebar-sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+.titlebar-controls {
+  display: flex;
+  align-self: stretch;
+}
+
+.titlebar-btn {
+  width: 46px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text-faint);
+  cursor: default;
+  transition:
+    background var(--duration-fast) var(--ease-out-soft),
+    color var(--duration-fast) var(--ease-out-soft);
+}
+
+.titlebar-btn:hover {
+  background: oklch(72% 0.04 85 / 0.12);
+  color: var(--color-text);
+}
+
+.titlebar-btn:active {
+  background: oklch(72% 0.04 85 / 0.18);
+}
+
+.titlebar-close:hover {
+  background: oklch(56% 0.16 25 / 0.9);
+  color: oklch(96% 0.02 90);
+}
+
+.titlebar-close:active {
+  background: oklch(50% 0.16 25 / 0.95);
+}
+
+.titlebar-btn:focus-visible {
+  outline: 2px solid var(--color-leaf);
+  outline-offset: -4px;
+}
+
+/* Invisible resize grips ringing the borderless window. Corners win over
+ * edges (edges inset 7px); a few px is enough to grab without stealing
+ * clicks from the bar buttons or the HUD. */
+.resize-grips {
+  display: contents;
+}
+
+.resize-grip {
+  position: fixed;
+  z-index: 50;
+}
+
+.rg-n { top: 0; left: 7px; right: 7px; height: 4px; cursor: ns-resize; }
+.rg-s { bottom: 0; left: 7px; right: 7px; height: 5px; cursor: ns-resize; }
+.rg-w { left: 0; top: 7px; bottom: 7px; width: 5px; cursor: ew-resize; }
+.rg-e { right: 0; top: 7px; bottom: 7px; width: 5px; cursor: ew-resize; }
+.rg-nw { top: 0; left: 0; width: 7px; height: 7px; cursor: nwse-resize; }
+.rg-ne { top: 0; right: 0; width: 7px; height: 7px; cursor: nesw-resize; }
+.rg-sw { bottom: 0; left: 0; width: 7px; height: 7px; cursor: nesw-resize; }
+.rg-se { bottom: 0; right: 0; width: 7px; height: 7px; cursor: nwse-resize; }

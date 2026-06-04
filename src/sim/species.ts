@@ -1,5 +1,6 @@
 ﻿import type { SimState, TierId } from "./types";
 import type { TankState } from "./tankgen";
+import { abundanceOf, isEcoSpecies, worldHasSpecies } from "./ecology";
 
 /**
  * Species roster - pure data + a pure population function.
@@ -262,7 +263,15 @@ export interface PopulationEntry {
   readonly count: number;
 }
 
-/** Deterministic population from (tank, sim) - the render layer only reads. */
+/**
+ * Deterministic population from (tank, sim) — the render layer only reads.
+ *
+ * A species shows only if: it fits the land window, its habitat exists, the
+ * succession tier has unlocked it (gate), AND it rolled present in this world.
+ * Once present, the live COUNT tracks the ecology pool (rises and falls over
+ * days). Cozy invariant: a present, above-refuge species always shows ≥1
+ * sprite — it never silently reads as "extinct".
+ */
 export function populationFor(
   tank: TankState,
   sim: SimState,
@@ -273,17 +282,31 @@ export function populationFor(
       continue;
     }
     if (!habitatExists(tank, def.habitat)) continue;
+    if (!worldHasSpecies(sim.seed, def.id)) continue;
     const scalar = sim.scalars[def.tier];
-    if (scalar < def.threshold) continue;
-    const growth = Math.min(
-      1,
-      ((scalar - def.threshold) / Math.max(0.001, 1 - def.threshold)) * 1.4,
-    );
-    const count = Math.max(1, Math.round(def.maxCount * growth));
+    if (scalar < def.threshold) continue; // tier hasn't unlocked it yet
+
+    const abundance = abundanceOf(sim.eco, def.id);
+    let count: number;
+    if (isEcoSpecies(def.id)) {
+      if (abundance < ECO_VISIBLE_FLOOR) continue; // resting below the floor
+      // map pool 0..1 → 1..maxCount, gently boosted so a healthy pool fills
+      const fill = Math.min(1, abundance * 1.6);
+      count = Math.max(1, Math.round(def.maxCount * fill));
+    } else {
+      const growth = Math.min(
+        1,
+        ((scalar - def.threshold) / Math.max(0.001, 1 - def.threshold)) * 1.4,
+      );
+      count = Math.max(1, Math.round(def.maxCount * growth));
+    }
     entries.push({ def, count });
   }
   return entries;
 }
+
+/** below this pool level a species is "resting" — shown as 0 sprites */
+const ECO_VISIBLE_FLOOR = 0.04;
 
 function habitatExists(tank: TankState, habitat: Habitat): boolean {
   const hasWater = tank.waterlineY > 2;

@@ -35,6 +35,15 @@ export const saveSchema = z.object({
     pools: z.object({
       nutrients: z.number().min(0),
     }),
+    // the living food web — live mutable state (NOT a pure fn of seed once
+    // the sim has run), so it must be persisted verbatim. Optional/loose so
+    // v1 saves and future roster changes load without a hard migration.
+    eco: z
+      .object({
+        food: z.record(z.string(), z.number().min(0).max(1)),
+        pop: z.record(z.string(), z.number().min(0).max(1)),
+      })
+      .optional(),
   }),
   discoveries: z.array(
     z.object({
