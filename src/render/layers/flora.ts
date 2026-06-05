@@ -566,6 +566,21 @@ function pickTreeAnchors(tank: TankState, seed: number): TreeAnchor[] {
 /** the trunk keeps thickening for ~40 in-game days, long after it's full height */
 const TREE_GIRTH_TAU_MS = 40 * 24 * 3_600_000;
 
+/** ONE light direction shared by trunk + every limb (normalized up-left). */
+const LIGHT = { x: -0.72, y: -0.69 } as const;
+/** a primary's shoulder = this fraction of the trunk half-width at its attach */
+const SHOULDER_FRAC = 0.7;
+/** ribbon taper exponent */
+const LIMB_TAPER_P = 1.2;
+/** min limb half-width — a visible thread on big trees, sub-pixel on small */
+function limbFloorPx(s: number): number {
+  return Math.min(0.6, s * 0.18);
+}
+/** da Vinci rule: a limb narrows to child cross-section ⇒ child = parent/√n */
+function endWidthFor(shoulder: number, childCount: number, floor: number): number {
+  return childCount > 0 ? Math.max(floor, shoulder / Math.sqrt(childCount)) : floor;
+}
+
 /** leaf palette + fullness per season — the canopy changes its coat */
 interface Foliage {
   readonly base: number;
@@ -655,6 +670,8 @@ function drawTree(
     (baseWidth * (1 - t * 0.82) ** 0.95 + s * 0.6) * 0.5;
   const left: number[] = [];
   const right: number[] = [];
+  const leftInset: number[] = []; // up-left rim partner
+  const rightInset: number[] = []; // down-right core-shadow partner
   const SEGS = 10;
   for (let i = 0; i <= SEGS; i++) {
     const t = i / SEGS;
@@ -662,6 +679,8 @@ function drawTree(
     const w = widthAt(t);
     left.push(sx - w, sy);
     right.unshift(sx + w, sy);
+    leftInset.push(sx - w * 0.78, sy);
+    rightInset.unshift(sx + w * 0.55, sy);
   }
   // SLOPE-AWARE base: the nebari flare and roots follow the local ground so
   // the tree sits ON the bank (flare slants with the soil; downhill roots
@@ -707,7 +726,13 @@ function drawTree(
         });
     }
   }
-  // lit left face + a few dark bark furrows for gnarl
+  // 3-tone bark lit from the upper-left (load order = a lit cylinder):
+  // (a) base woodDark already drawn. (b) core-shadow sliver on the down-right.
+  g.poly([...right, ...rightInset.slice().reverse()]).fill({
+    color: SCENE.woodCore,
+    alpha: 0.55,
+  });
+  // (c) lit-left body face
   const litL: number[] = [];
   const litR: number[] = [];
   for (let i = 0; i <= SEGS; i++) {
@@ -718,12 +743,25 @@ function drawTree(
     litR.unshift(sx - w * 0.1, sy);
   }
   g.poly([...litL, ...litR]).fill({ color: SCENE.wood, alpha: 0.85 });
+  // (d) rim catch-light sliver on the up-left edge
+  g.poly([...left, ...leftInset.slice().reverse()]).fill({
+    color: SCENE.woodLit,
+    alpha: 0.9,
+  });
+  // (e) furrows: deep grooves + one lit lip
   for (let f = 0; f < 2; f++) {
     const [ax, ay] = spine(0.15 + f * 0.3);
     const [bx, by] = spine(0.5 + f * 0.28);
     g.moveTo(ax, ay)
       .quadraticCurveTo((ax + bx) / 2 + s * 0.3, (ay + by) / 2, bx, by)
-      .stroke({ color: SCENE.woodDark, width: Math.max(1, s * 0.18), alpha: 0.5 });
+      .stroke({ color: SCENE.woodCore, width: Math.max(1, s * 0.18), alpha: 0.45 });
+  }
+  {
+    const [ax, ay] = spine(0.15);
+    const [bx, by] = spine(0.5);
+    g.moveTo(ax - s * 0.3, ay)
+      .quadraticCurveTo((ax + bx) / 2, (ay + by) / 2, bx - s * 0.3, by)
+      .stroke({ color: SCENE.woodLit, width: Math.max(1, s * 0.14), alpha: 0.4 });
   }
 
   // ---- ORGANIC CANOPY: a recursive jittered armature of MEANDERING limbs,
@@ -740,7 +778,8 @@ function drawTree(
     y: number;
     ang: number; // 0 = straight up; + leans toward heavySide
     len: number;
-    w: number;
+    w: number; // shoulder half-width
+    endW: number; // half-width at the tip/joint (taper target)
     depth: number;
     key: number;
   }
@@ -773,6 +812,8 @@ function drawTree(
     const bot: number[] = [];
     const BSEG = 6;
     let prev = bez(0);
+    let midNx = 0;
+    let midNy = -1;
     for (let i = 0; i <= BSEG; i++) {
       const t = i / BSEG;
       const b = bez(t);
@@ -781,18 +822,69 @@ function drawTree(
       const nl = Math.hypot(nx, ny) || 1;
       nx /= nl;
       ny /= nl;
-      const wi = c.w * (1 - t) ** 1.3 + 0.4;
+      if (i === Math.round(BSEG / 2)) {
+        midNx = nx;
+        midNy = ny;
+      }
+      // relative taper: shoulder (c.w) at t=0 → tip/joint (c.endW) at t=1
+      const wi = (c.w - c.endW) * (1 - t) ** LIMB_TAPER_P + c.endW;
       top.push(b[0] + nx * wi, b[1] + ny * wi);
       bot.unshift(b[0] - nx * wi, b[1] - ny * wi);
       prev = b;
     }
+    // body = shadow tone (a thin limb is mostly in shadow)
     g.poly([...top, ...bot]).fill({ color: SCENE.woodDark, alpha: 0.95 });
+    // 2nd tone along the lit edge, picked by the SHARED light vector
+    const litIsTop = LIGHT.x * midNx + LIGHT.y * midNy > 0;
+    const sgn = litIsTop ? 1 : -1;
+    const litOuter: number[] = [];
+    const litInner: number[] = [];
+    prev = bez(0);
+    for (let i = 0; i <= BSEG; i++) {
+      const t = i / BSEG;
+      const b = bez(t);
+      let nx = b[1] - prev[1];
+      let ny = -(b[0] - prev[0]);
+      const nl = Math.hypot(nx, ny) || 1;
+      nx /= nl;
+      ny /= nl;
+      const wi = (c.w - c.endW) * (1 - t) ** LIMB_TAPER_P + c.endW;
+      litOuter.push(b[0] + sgn * nx * wi, b[1] + sgn * ny * wi);
+      litInner.unshift(b[0] + sgn * nx * wi * 0.4, b[1] + sgn * ny * wi * 0.4);
+      prev = b;
+    }
+    g.poly([...litOuter, ...litInner]).fill({ color: SCENE.wood, alpha: 0.9 });
+    // thick primaries get a hairline rim catch-light
+    if (c.depth <= 1) {
+      const rimOuter: number[] = [];
+      const rimInner: number[] = [];
+      prev = bez(0);
+      for (let i = 0; i <= BSEG; i++) {
+        const t = i / BSEG;
+        const b = bez(t);
+        let nx = b[1] - prev[1];
+        let ny = -(b[0] - prev[0]);
+        const nl = Math.hypot(nx, ny) || 1;
+        nx /= nl;
+        ny /= nl;
+        const wi = (c.w - c.endW) * (1 - t) ** LIMB_TAPER_P + c.endW;
+        rimOuter.push(b[0] + sgn * nx * wi, b[1] + sgn * ny * wi);
+        rimInner.unshift(b[0] + sgn * nx * wi * 0.85, b[1] + sgn * ny * wi * 0.85);
+        prev = b;
+      }
+      g.poly([...rimOuter, ...rimInner]).fill({ color: SCENE.woodLit, alpha: 0.75 });
+    }
     return { x: tipX, y: tipY, ang: angTip };
   };
 
   const dotColor = foliage.base === 0xc8893a ? 0xd86a3a : 0xe89bb0;
   const grow = (c: Limb): void => {
-    const tip = drawLimb(c);
+    const floor = limbFloorPx(s);
+    // decide children FIRST so this limb tapers exactly to the joint width
+    const willFork = c.depth < maxDepth;
+    const n = willFork ? 1 + Math.floor(rv(c.key + 13) * 2.5) : 0; // 1..3
+    const drawC: Limb = { ...c, endW: endWidthFor(c.w, n, floor) };
+    const tip = drawLimb(drawC);
     const puff = c.depth >= maxDepth || rv(c.key + 7) < 0.3;
     if (puff) {
       const cw =
@@ -812,8 +904,7 @@ function drawTree(
         }
       }
     }
-    if (c.depth >= maxDepth) return;
-    const n = 1 + Math.floor(rv(c.key + 13) * 2.5); // 1..3 children
+    if (!willFork) return;
     for (let i = 0; i < n; i++) {
       const spreadSign = i % 2 === 0 ? 1 : -1;
       const bias = spreadSign === heavySide ? 1.25 : 0.7;
@@ -822,7 +913,8 @@ function drawTree(
         y: tip.y,
         ang: tip.ang + spreadSign * (0.5 + rv(c.key + i * 9 + 1) * 0.6),
         len: c.len * (0.62 + rv(c.key + i * 9 + 3) * 0.22) * bias,
-        w: c.w * 0.62,
+        w: drawC.endW, // child emerges AT the node width → clean step-down joint
+        endW: floor, // provisional; the child's grow() resets from its own forks
         depth: c.depth + 1,
         key: c.key * 4 + i + 31,
       });
@@ -840,7 +932,8 @@ function drawTree(
       y: ay,
       ang: sideP * (0.55 + rv(p * 17 + 2) * 0.45) + (t > 0.8 ? heavySide * 0.25 : 0),
       len: padScale * (heavy ? 1.25 : 0.7) * (0.9 + rv(p * 17 + 4) * 0.5),
-      w: baseWidth * 0.3 * (1 - t * 0.4),
+      w: widthAt(t) * SHOULDER_FRAC, // always thinner than the trunk at attach
+      endW: limbFloorPx(s), // provisional; grow() sets it from the primary's forks
       depth: 0,
       key: v + p * 97 + 50,
     });

@@ -29,6 +29,8 @@ export const SCENE = {
   rockShadow: 0x6f6c64,
   wood: 0x7a5a3a,
   woodDark: 0x64482e,
+  woodLit: 0x9a7a52, // rim catch-light on the upper-left lit edge
+  woodCore: 0x4f3826, // deepest core-shadow on the down-right edge
 
   microbeGlow: 0xe9ddb4,
   algae: 0x6f9e54,
