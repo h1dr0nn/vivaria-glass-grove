@@ -622,8 +622,10 @@ function drawTrees(
   const growth = clamp01((plants - TREE_START) / (1 - TREE_START));
   if (growth <= 0) return;
   // girth is driven by AGE, not the plant scalar — the trunk slowly fattens
-  // over many days while height settles early (how a bonsai actually ages)
-  const girth = 1 - Math.exp(-treeAgeMs / TREE_GIRTH_TAU_MS);
+  // over many days while height settles early (how a bonsai actually ages).
+  // Guard legacy saves where treeAgeMs is missing → NaN would break every poly.
+  const ageMs = Number.isFinite(treeAgeMs) ? treeAgeMs : 0;
+  const girth = clamp01(1 - Math.exp(-ageMs / TREE_GIRTH_TAU_MS));
   const foliage = foliageFor(season);
   for (const anchor of anchors) {
     drawTree(g, layout, anchor, terrain, growth, girth, plants, foliage, phase);
@@ -695,8 +697,10 @@ function drawTree(
   const cxCell = anchor.x;
   const xL = Math.max(0, cxCell - 1);
   const xR = Math.min(terrain.length - 1, cxCell + 1);
-  const slopeCells = (terrain[xR] - terrain[xL]) / Math.max(1, xR - xL); // +→rises right
-  const SPREAD = (baseWidth / s) * 0.85; // flare half-span in cells
+  // local slope, CLAMPED so a steep neighbor can't skew the base into a beam
+  const rawSlope = (terrain[xR] - terrain[xL]) / Math.max(1, xR - xL);
+  const slopeCells = Math.max(-1, Math.min(1, rawSlope)); // +→rises right
+  const SPREAD = Math.min(3, (baseWidth / s) * 0.85); // flare half-span, capped
   const groundPx = (dCells: number): [number, number] => [
     screenX(layout, anchor.x + 0.5 + dCells),
     screenY(layout, anchor.y + slopeCells * dCells),
@@ -710,14 +714,14 @@ function drawTree(
     baseX + baseWidth * 0.32, baseY - s * 0.5,
     gR[0], gR[1],
   ]).fill(SCENE.woodDark);
-  // roots plunging into the soil on each side
+  // short roots gripping the soil on each side (bounded — never long beams)
   for (const side of [-1, 1] as const) {
     const collar = groundPx(side * SPREAD * 0.7);
     const isDownhill = slopeCells !== 0 && side !== Math.sign(slopeCells);
     const rootN = 2 + (isDownhill ? 1 : 0);
     for (let r = 0; r < rootN; r++) {
-      const reach = baseWidth * (0.4 + r * 0.35) * (isDownhill ? 1.5 : 1);
-      const depth = s * (1.1 + r * 0.6) * (isDownhill ? 1.6 : 1);
+      const reach = Math.min(s * 3, baseWidth * (0.4 + r * 0.3) * (isDownhill ? 1.3 : 1));
+      const depth = Math.min(s * 2.5, s * (1 + r * 0.5) * (isDownhill ? 1.3 : 1));
       g.moveTo(collar[0], collar[1] - s * 0.2)
         .quadraticCurveTo(
           collar[0] + side * reach * 0.6,
@@ -915,10 +919,16 @@ function drawTree(
     for (let i = 0; i < n; i++) {
       const spreadSign = i % 2 === 0 ? 1 : -1;
       const bias = spreadSign === heavySide ? 1.25 : 0.7;
+      // clamp heading so a limb NEVER points downward (no stray beams to the
+      // ground); branches always reach up & outward, ±72° from straight up
+      const childAng = Math.max(
+        -1.25,
+        Math.min(1.25, tip.ang + spreadSign * (0.5 + rv(c.key + i * 9 + 1) * 0.6)),
+      );
       grow({
         x: tip.x,
         y: tip.y,
-        ang: tip.ang + spreadSign * (0.5 + rv(c.key + i * 9 + 1) * 0.6),
+        ang: childAng,
         len: c.len * (0.62 + rv(c.key + i * 9 + 3) * 0.22) * bias,
         w: drawC.endW, // child emerges AT the node width → clean step-down joint
         endW: floor, // provisional; the child's grow() resets from its own forks
