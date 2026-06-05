@@ -99,7 +99,7 @@ export function buildFlora(tank: TankState, layout: TankLayout): FloraLayer {
     const season = environmentAt(sim.seed, sim.simTimeMs).seasonName;
     drawMicrobes(microbeGfx, tank, layout, speckSeeds, wetness, sim, swayPhase);
     drawAlgae(algaeGfx, tank, layout, algaeAnchors, sim.scalars.algae, lush, swayPhase);
-    drawTrees(treeGfx, layout, treeAnchors, sim.scalars.plants, sim.treeAgeMs ?? 0, season, swayPhase);
+    drawTrees(treeGfx, layout, treeAnchors, tank.terrainHeight, sim.scalars.plants, sim.treeAgeMs ?? 0, season, swayPhase);
     drawPlants(plantGfx, layout, plantAnchors, sim.scalars.plants, lush, swayPhase);
     drawLilies(lilyGfx, tank, layout, lilyAnchors, sim.scalars.algae, swayPhase);
   };
@@ -590,6 +590,7 @@ function drawTrees(
   g: Graphics,
   layout: TankLayout,
   anchors: readonly TreeAnchor[],
+  terrain: readonly number[],
   plants: number,
   treeAgeMs: number,
   season: string,
@@ -603,7 +604,7 @@ function drawTrees(
   const girth = 1 - Math.exp(-treeAgeMs / TREE_GIRTH_TAU_MS);
   const foliage = foliageFor(season);
   for (const anchor of anchors) {
-    drawTree(g, layout, anchor, growth, girth, plants, foliage, phase);
+    drawTree(g, layout, anchor, terrain, growth, girth, plants, foliage, phase);
   }
 }
 
@@ -612,6 +613,7 @@ function drawTree(
   g: Graphics,
   layout: TankLayout,
   anchor: TreeAnchor,
+  terrain: readonly number[],
   growth: number,
   girth: number,
   plants: number,
@@ -660,15 +662,49 @@ function drawTree(
     left.push(sx - w, sy);
     right.unshift(sx + w, sy);
   }
-  // nebari — root flare spreading wider than the trunk at the very base
-  left.unshift(baseX - baseWidth * 0.85, baseY + s * 0.3);
-  right.push(baseX + baseWidth * 0.85, baseY + s * 0.3);
-  g.poly([...left, ...right]).fill(SCENE.woodDark);
-  // surface roots humping out either side of the base
-  for (const side of [-1, 1]) {
-    g.ellipse(baseX + side * baseWidth * 0.6, baseY, baseWidth * 0.4, s * 0.5).fill(
-      SCENE.woodDark,
-    );
+  // SLOPE-AWARE base: the nebari flare and roots follow the local ground so
+  // the tree sits ON the bank (flare slants with the soil; downhill roots
+  // reach farther and plunge deeper to grip the falling ground).
+  const cxCell = anchor.x;
+  const xL = Math.max(0, cxCell - 1);
+  const xR = Math.min(terrain.length - 1, cxCell + 1);
+  const slopeCells = (terrain[xR] - terrain[xL]) / Math.max(1, xR - xL); // +→rises right
+  const SPREAD = (baseWidth / s) * 0.85; // flare half-span in cells
+  const groundPx = (dCells: number): [number, number] => [
+    screenX(layout, anchor.x + 0.5 + dCells),
+    screenY(layout, anchor.y + slopeCells * dCells),
+  ];
+  const gL = groundPx(-SPREAD);
+  const gR = groundPx(SPREAD);
+  // flare sitting on the diagonal ground, rising into the trunk
+  g.poly([
+    gL[0], gL[1],
+    baseX - baseWidth * 0.32, baseY - s * 0.5,
+    baseX + baseWidth * 0.32, baseY - s * 0.5,
+    gR[0], gR[1],
+  ]).fill(SCENE.woodDark);
+  // roots plunging into the soil on each side
+  for (const side of [-1, 1] as const) {
+    const collar = groundPx(side * SPREAD * 0.7);
+    const isDownhill = slopeCells !== 0 && side !== Math.sign(slopeCells);
+    const rootN = 2 + (isDownhill ? 1 : 0);
+    for (let r = 0; r < rootN; r++) {
+      const reach = baseWidth * (0.4 + r * 0.35) * (isDownhill ? 1.5 : 1);
+      const depth = s * (1.1 + r * 0.6) * (isDownhill ? 1.6 : 1);
+      g.moveTo(collar[0], collar[1] - s * 0.2)
+        .quadraticCurveTo(
+          collar[0] + side * reach * 0.6,
+          collar[1] + depth * 0.4,
+          collar[0] + side * reach,
+          collar[1] + depth,
+        )
+        .stroke({
+          color: SCENE.woodDark,
+          width: Math.max(1, baseWidth * 0.18 * (1 - r * 0.2)),
+          alpha: 0.9,
+          cap: "round",
+        });
+    }
   }
   // lit left face + a few dark bark furrows for gnarl
   const litL: number[] = [];
@@ -689,70 +725,124 @@ function drawTree(
       .stroke({ color: SCENE.woodDark, width: Math.max(1, s * 0.18), alpha: 0.5 });
   }
 
-  // each tier is a CURVED, TAPERED branch carrying a cloud at its tip; the
-  // whole limb (branch + cloud) sways as ONE unit so leaves stay attached.
-  const tierCount = 2 + Math.round(girth * 4); // 2..6 tiers over the years
+  // ---- ORGANIC CANOPY: a recursive jittered armature of MEANDERING limbs,
+  // biased to one heavy side with gaps & varied forks → an irregular cloud-
+  // pruned silhouette, never a symmetric triangle (research-designed). ----
   const padScale = s * (1.6 + growth * 1.4 + girth * 1.0);
-  const lowest = 0.4;
-  for (let tier = 0; tier < tierCount; tier++) {
-    const ft = tierCount <= 1 ? 1 : tier / (tierCount - 1); // 0 bottom .. 1 apex
-    const [tx, ty] = spine(lowest + ft * (1 - lowest));
-    const isApex = tier === tierCount - 1;
-    const side = isApex ? 0 : rv(tier * 2 + 9) < 0.5 ? leanSign : -leanSign;
-    const reach = isApex ? 0 : padScale * (1.5 - ft * 0.7) * (0.8 + rv(tier * 4 + 1) * 0.5);
-    // this limb's own sway — branch tip AND its cloud move together
-    const limbSway = Math.sin(phase * 1.0 + v + tier * 1.7) * (0.18 + ft * 0.25);
-    const tipX = tx + side * reach + limbSway * padScale * 0.4;
-    const tipY = ty - reach * 0.18 + limbSway * padScale * 0.12; // angle UP a touch
+  const heavySide = leanSign;
+  const maxDepth = 1 + Math.round(girth * 2); // 1..3 levels with age
+  const primaryCount = 2 + Math.round(girth * 3); // 2..5 primaries
+  const ATTACH = [0.34, 0.5, 0.62, 0.78, 0.9];
 
-    if (!isApex) {
-      // a curved limb: rises from the trunk, dips, then lifts to the tip;
-      // tapers from a thick shoulder to a fine end (drawn as a filled ribbon)
-      const shoulderW = baseWidth * 0.3 * (1 - ft * 0.4);
-      const c1x = tx + side * reach * 0.35;
-      const c1y = ty + s * 0.5; // initial droop
-      const c2x = tx + side * reach * 0.8;
-      const c2y = tipY - s * 0.2;
-      const branch = (t: number): [number, number] => {
-        const u = 1 - t;
-        return [
-          u * u * u * tx + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * tipX,
-          u * u * u * ty + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * tipY,
-        ];
-      };
-      const top: number[] = [];
-      const bot: number[] = [];
-      const BSEG = 6;
-      for (let i = 0; i <= BSEG; i++) {
-        const t = i / BSEG;
-        const [bx, by] = branch(t);
-        const w = shoulderW * (1 - t * 0.85);
-        top.push(bx, by - w);
-        bot.unshift(bx, by + w);
-      }
-      g.poly([...top, ...bot]).fill({ color: SCENE.woodDark, alpha: 0.95 });
+  interface Limb {
+    x: number;
+    y: number;
+    ang: number; // 0 = straight up; + leans toward heavySide
+    len: number;
+    w: number;
+    depth: number;
+    key: number;
+  }
+
+  // one curved, tapered limb segment → returns its (curved) tip + heading
+  const drawLimb = (c: Limb): { x: number; y: number; ang: number } => {
+    const bend = (rv(c.key + 2) - 0.5) * 0.9; // meander
+    const angEnd = c.ang + bend;
+    const droop = 0.02 * (c.len / s) * (0.4 + 0.6 * rv(c.key + 5)); // gravity sag
+    const angTip = angEnd + droop;
+    const sway = Math.sin(phase * 0.6 + v + c.depth) * s * 0.12;
+    const px = Math.cos(c.ang);
+    const py = Math.sin(c.ang);
+    const k1 = (rv(c.key + 3) - 0.3) * c.len * 0.45;
+    const k2 = (rv(c.key + 4) - 0.7) * c.len * 0.45;
+    const c1x = c.x + Math.sin(c.ang) * c.len * 0.33 + px * k1;
+    const c1y = c.y - Math.cos(c.ang) * c.len * 0.33 + py * k1;
+    const c2x = c.x + Math.sin(angEnd) * c.len * 0.66 + px * k2 + sway * 0.5;
+    const c2y = c.y - Math.cos(angEnd) * c.len * 0.66 + py * k2;
+    const tipX = c.x + Math.sin(angTip) * c.len + sway;
+    const tipY = c.y - Math.cos(angTip) * c.len;
+    const bez = (t: number): [number, number] => {
+      const u = 1 - t;
+      return [
+        u * u * u * c.x + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * tipX,
+        u * u * u * c.y + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * tipY,
+      ];
+    };
+    const top: number[] = [];
+    const bot: number[] = [];
+    const BSEG = 6;
+    let prev = bez(0);
+    for (let i = 0; i <= BSEG; i++) {
+      const t = i / BSEG;
+      const b = bez(t);
+      let nx = b[1] - prev[1];
+      let ny = -(b[0] - prev[0]);
+      const nl = Math.hypot(nx, ny) || 1;
+      nx /= nl;
+      ny /= nl;
+      const wi = c.w * (1 - t) ** 1.3 + 0.4;
+      top.push(b[0] + nx * wi, b[1] + ny * wi);
+      bot.unshift(b[0] - nx * wi, b[1] - ny * wi);
+      prev = b;
     }
+    g.poly([...top, ...bot]).fill({ color: SCENE.woodDark, alpha: 0.95 });
+    return { x: tipX, y: tipY, ang: angTip };
+  };
 
-    // ONE cohesive cloud caps each branch tip — a lobed blob with a clean
-    // outline, not scattered nuggets. It extends outward over the branch.
-    const tierWidth =
-      padScale * (1.6 - ft * 0.5) * (0.85 + rv(tier * 3 + 5) * 0.4) * (0.55 + foliage.fullness * 0.55);
-    const dir = side === 0 ? 0 : Math.sign(side);
-    const cx = tipX + dir * tierWidth * 0.2;
-    const cy = tipY - tierWidth * 0.32;
-    drawCloud(g, cx, cy, tierWidth, foliage, v + tier * 11.3, phase);
-
-    // spring blossoms / autumn berries dot the mature canopy
-    if (plants >= 0.85 && v % 3 === 0) {
-      const dotColor = foliage.base === 0xc8893a ? 0xd86a3a : 0xe89bb0;
-      for (let k = 0; k < 3; k++) {
-        g.circle(
-          cx + Math.sin(v * 7.7 + tier + k * 3.3) * tierWidth * 0.4,
-          cy + Math.cos(v * 3.3 + k * 2.1) * tierWidth * 0.22,
-          Math.max(0.8, s * 0.24),
-        ).fill({ color: dotColor, alpha: 0.95 });
+  const dotColor = foliage.base === 0xc8893a ? 0xd86a3a : 0xe89bb0;
+  const grow = (c: Limb): void => {
+    const tip = drawLimb(c);
+    const puff = c.depth >= maxDepth || rv(c.key + 7) < 0.3;
+    if (puff) {
+      const cw =
+        padScale * (1.15 - c.depth * 0.22) * (0.8 + rv(c.key + 8) * 0.5) *
+        (0.55 + foliage.fullness * 0.55);
+      const r = c.w * 1.5;
+      const ccx = tip.x + Math.sin(tip.ang) * r;
+      const ccy = tip.y - Math.cos(tip.ang) * r - cw * 0.3;
+      drawCloud(g, ccx, ccy, cw, foliage, c.key, phase);
+      if (plants >= 0.85 && v % 3 === 0) {
+        for (let k = 0; k < 3; k++) {
+          g.circle(
+            ccx + Math.sin(v * 7.7 + c.key + k * 3.3) * cw * 0.4,
+            ccy + Math.cos(v * 3.3 + k * 2.1) * cw * 0.22,
+            Math.max(0.8, s * 0.24),
+          ).fill({ color: dotColor, alpha: 0.95 });
+        }
       }
     }
+    if (c.depth >= maxDepth) return;
+    const n = 1 + Math.floor(rv(c.key + 13) * 2.5); // 1..3 children
+    for (let i = 0; i < n; i++) {
+      const spreadSign = i % 2 === 0 ? 1 : -1;
+      const bias = spreadSign === heavySide ? 1.25 : 0.7;
+      grow({
+        x: tip.x,
+        y: tip.y,
+        ang: tip.ang + spreadSign * (0.5 + rv(c.key + i * 9 + 1) * 0.6),
+        len: c.len * (0.62 + rv(c.key + i * 9 + 3) * 0.22) * bias,
+        w: c.w * 0.62,
+        depth: c.depth + 1,
+        key: c.key * 4 + i + 31,
+      });
+    }
+  };
+
+  for (let p = 0; p < primaryCount; p++) {
+    const sideP = p % 2 === 0 ? heavySide : -heavySide;
+    if (sideP !== heavySide && rv(p * 17 + 3) < 0.35) continue; // light-side gaps
+    const t = clamp01((ATTACH[p] ?? 0.85) + (rv(p * 17 + 1) - 0.5) * 0.1);
+    const [ax, ay] = spine(t);
+    const heavy = sideP === heavySide;
+    grow({
+      x: ax,
+      y: ay,
+      ang: sideP * (0.55 + rv(p * 17 + 2) * 0.45) + (t > 0.8 ? heavySide * 0.25 : 0),
+      len: padScale * (heavy ? 1.25 : 0.7) * (0.9 + rv(p * 17 + 4) * 0.5),
+      w: baseWidth * 0.3 * (1 - t * 0.4),
+      depth: 0,
+      key: v + p * 97 + 50,
+    });
   }
 }
 
