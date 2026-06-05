@@ -581,6 +581,13 @@ function endWidthFor(shoulder: number, childCount: number, floor: number): numbe
   return childCount > 0 ? Math.max(floor, shoulder / Math.sqrt(childCount)) : floor;
 }
 
+/** reverse a flat [x,y,x,y,...] point list BY PAIR (not element) for clean winding */
+function reversePairs(flat: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let i = flat.length - 2; i >= 0; i -= 2) out.push(flat[i], flat[i + 1]);
+  return out;
+}
+
 /** leaf palette + fullness per season — the canopy changes its coat */
 interface Foliage {
   readonly base: number;
@@ -728,7 +735,7 @@ function drawTree(
   }
   // 3-tone bark lit from the upper-left (load order = a lit cylinder):
   // (a) base woodDark already drawn. (b) core-shadow sliver on the down-right.
-  g.poly([...right, ...rightInset.slice().reverse()]).fill({
+  g.poly([...right, ...reversePairs(rightInset)]).fill({
     color: SCENE.woodCore,
     alpha: 0.55,
   });
@@ -744,7 +751,7 @@ function drawTree(
   }
   g.poly([...litL, ...litR]).fill({ color: SCENE.wood, alpha: 0.85 });
   // (d) rim catch-light sliver on the up-left edge
-  g.poly([...left, ...leftInset.slice().reverse()]).fill({
+  g.poly([...left, ...reversePairs(leftInset)]).fill({
     color: SCENE.woodLit,
     alpha: 0.9,
   });
