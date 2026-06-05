@@ -634,7 +634,8 @@ function drawTree(
   // tiers with age (girth), and each tree's bends/tiers are seeded so no two
   // tanks look alike. Height climbs to ~30 cells — about double the old cap.
   const trunkPx = s * (12 + growth * 8 + girth * 14); // up to ~34 cells
-  const baseWidth = s * (1.6 + girth * 4.4); // girth fattens with age
+  // a substantial trunk — fattens with age and stays thick well up its height
+  const baseWidth = s * (2.6 + girth * 5.4);
 
   // gnarled trunk: two seeded bends up a tall spine (movement)
   const bend1 = (0.6 + rv(1) * 0.9) * leanSign;
@@ -649,9 +650,9 @@ function drawTree(
     return [x, y];
   };
 
-  // trunk body — tapered polygon, fat base to a narrow apex
+  // trunk body — tapered polygon, fat base staying thick well up the height
   const widthAt = (t: number): number =>
-    (baseWidth * (1 - t) ** 1.4 + s * 0.5) * 0.5;
+    (baseWidth * (1 - t * 0.82) ** 0.95 + s * 0.6) * 0.5;
   const left: number[] = [];
   const right: number[] = [];
   const SEGS = 10;
